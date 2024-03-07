@@ -7,6 +7,8 @@ public:
     Swapchain(Window* window);
     ~Swapchain();
     
+    uint32_t AcquireImage(VkSemaphore semaphore, VkFence fence);
+    
     void CreateImageViews();
     VkImageView* GetImageViews();
     

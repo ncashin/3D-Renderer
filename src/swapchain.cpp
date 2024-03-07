@@ -58,7 +58,7 @@ Swapchain::Swapchain(Window* window){
     create_info.imageColorSpace = chosen_surface_format.colorSpace;
     create_info.imageExtent = extent_;
     create_info.imageArrayLayers = 1;
-    create_info.imageUsage = VK_IMAGE_USAGE_TRANSFER_DST_BIT;
+    create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     
     if (render_context->graphics_queue.vk_family_index != render_context->present_queue.vk_family_index){
         uint32_t family_indices[] = {
@@ -95,9 +95,15 @@ Swapchain::~Swapchain(){
     vkDestroySurfaceKHR(render_context->vk_instance, vk_surface_, nullptr);
 }
 
+uint32_t Swapchain::AcquireImage(VkSemaphore semaphore, VkFence fence){
+    uint32_t image_index;
+    vkAcquireNextImageKHR(render_context->vk_device, vk_swapchain_, UINT64_MAX, semaphore, fence, &image_index);
+    return   image_index;
+}
+
 void Swapchain::CreateImageViews(){
     VkImageViewCreateInfo image_view_create_info{};
-    image_view_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    image_view_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     image_view_create_info.viewType = VK_IMAGE_VIEW_TYPE_2D;
     image_view_create_info.format   = surface_format_.format;
     image_view_create_info.components.r = VK_COMPONENT_SWIZZLE_IDENTITY;
@@ -110,7 +116,7 @@ void Swapchain::CreateImageViews(){
     image_view_create_info.subresourceRange.levelCount   = 1;
     image_view_create_info.subresourceRange.baseArrayLayer = 0;
     image_view_create_info.subresourceRange.layerCount     = 1;
-    
+        
     image_views.resize(images_.size());
     for(int i = 0; i < image_views.size(); i++){
         image_view_create_info.image = images_[i];

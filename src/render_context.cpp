@@ -39,7 +39,8 @@ RenderContext::RenderContext(Window* window, const bool enable_validation_layers
                              const char* applcation_name, const char* engine_name){
     std::vector<const char*> extension_names;
     extension_names.emplace_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
-    
+    extension_names.emplace_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+
     unsigned int window_extension_count = 0;
     window->GetInstanceExtensions(&window_extension_count, nullptr);
     const char** window_extension_names = new const char*[window_extension_count];
@@ -98,8 +99,10 @@ RenderContext::RenderContext(Window* window, const bool enable_validation_layers
         debug_messenger_create_info.pNext = nullptr;
         debug_messenger_create_info.flags = 0;
         
-        debug_messenger_create_info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT;
-        debug_messenger_create_info.messageType     = VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT;
+        debug_messenger_create_info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | 
+        VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
+        debug_messenger_create_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | 
+        VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
         debug_messenger_create_info.pfnUserCallback = &DefaultDebugCallback;
         debug_messenger_create_info.pUserData = nullptr;
 
@@ -108,6 +111,7 @@ RenderContext::RenderContext(Window* window, const bool enable_validation_layers
     
     
     std::vector<const char*> device_extension_names{};
+    device_extension_names.emplace_back("VK_KHR_portability_subset");
     device_extension_names.emplace_back(VK_KHR_SWAPCHAIN_EXTENSION_NAME);
     
     uint32_t physical_device_count;
@@ -144,7 +148,7 @@ RenderContext::RenderContext(Window* window, const bool enable_validation_layers
         }
         
         VkPhysicalDeviceFeatures device_features{};
-        
+
         VkDeviceCreateInfo device_create_info{};
         device_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
         device_create_info.pNext = nullptr;
@@ -182,7 +186,7 @@ RenderContext::RenderContext(Window* window, const bool enable_validation_layers
 RenderContext::~RenderContext(){
     vkDestroyDevice(vk_device, nullptr);
     
-    vkutil::DestroyDebugUtilsMessengerEXT(vk_instance, nullptr, nullptr);
+    vkutil::DestroyDebugUtilsMessengerEXT(vk_instance, vk_debug_utils_messenger_, nullptr);
     vkDestroyInstance(vk_instance, nullptr);
 }
 }

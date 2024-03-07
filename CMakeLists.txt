@@ -3,7 +3,15 @@ set(CMAKE_CXX_STANDARD 14)
 project(engine)
 
 # --- Source Files --- #
-set(SOURCE_FILES src/main.cpp)
+set(SOURCE_FILES src/main.cpp 
+src/window.h src/window.cpp 
+src/vkutil.h src/vkutil.cpp
+src/render_context.h src/render_context.cpp
+src/allocator.h src/allocator.cpp
+src/swapchain.h src/swapchain.cpp
+src/render_buffer.h src/render_buffer.cpp
+src/pipeline.h src/pipeline.cpp
+src/render_manager.h src/render_manager.cpp)
 add_executable(runtime ${SOURCE_FILES})
 
 # --- Package Libraries --- #

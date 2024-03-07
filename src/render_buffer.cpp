@@ -58,7 +58,8 @@ RenderBuffer::RenderBuffer(Swapchain* swapchain) : swapchain_attachment(swapchai
     framebuffer_create_info.height = swapchain->extent_.height;
     framebuffer_create_info.layers = 1;
     framebuffer_create_info.renderPass = vk_render_pass;
-    framebuffer_create_info.pAttachments = attachment_views.data();
+    framebuffer_create_info.attachmentCount = (uint32_t)attachment_views.size();
+    framebuffer_create_info.pAttachments    = attachment_views.data();
     
     vk_framebuffers.resize(swapchain->images_.size());
     uint32_t swapchain_index = (uint32_t)attachment_views.size() - 1;
@@ -73,6 +74,22 @@ RenderBuffer::~RenderBuffer(){
         vkDestroyFramebuffer(render_context->vk_device, framebuffer, nullptr);
     }
     vkDestroyRenderPass(render_context->vk_device, vk_render_pass, nullptr);
+}
+
+void RenderBuffer::Begin(VkCommandBuffer vk_command_buffer, Swapchain* swapchain, uint32_t swapchain_image_index){
+    VkRenderPassBeginInfo begin_info{};
+    begin_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    begin_info.pNext = nullptr;
+    
+    begin_info.renderPass  = vk_render_pass;
+    begin_info.framebuffer = vk_framebuffers[swapchain_image_index];
+    begin_info.renderArea  = { 0, 0, swapchain->extent_ };
+    
+    VkClearValue clear_value = {};
+    begin_info.clearValueCount = 1;
+    begin_info.pClearValues = &clear_value;
+    
+    vkCmdBeginRenderPass(vk_command_buffer, &begin_info, VK_SUBPASS_CONTENTS_INLINE);
 }
 
 VkRenderPass vk_render_pass;

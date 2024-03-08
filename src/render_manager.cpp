@@ -34,9 +34,9 @@ RenderManager::~RenderManager(){
     vkDestroyCommandPool(render_context->vk_device, primary_graphics_command_pool, nullptr);
 }
 
-void RenderManager::Submit(SubmissionInfo submission_info){
+void RenderManager::Submit(SubmissionQueue queue, SubmissionInfo submission_info){
     submission_mutex.lock();
-    switch(submission_info.submission_queue){
+    switch(queue){
         case SubmissionQueue::Graphics:
             graphics_record_queue.emplace_back(submission_info.record_buffer);
             break;
@@ -44,10 +44,14 @@ void RenderManager::Submit(SubmissionInfo submission_info){
             graphics_record_queue.emplace_back(submission_info.record_buffer);
             break;
     }
-    submission_queue.emplace_back(submission_info);
+    submission_queue.emplace_back(Submission{SubmissionQueue::Graphics, new SubmissionInfo(submission_info)});
     submission_mutex.unlock();
 }
-
+void RenderManager::Present(PresentInfo present_info){
+    submission_mutex.lock();
+    submission_queue.emplace_back(Submission{SubmissionQueue::Present, new PresentInfo(present_info)});
+    submission_mutex.unlock();
+}
 
 void RenderManager::Record(){
     submission_mutex.lock();
@@ -73,33 +77,62 @@ void RenderManager::Record(){
 }
 void RenderManager::Submit(){
     submission_mutex.lock();
-    SubmissionInfo submission_info = submission_queue.front();
+    Submission submission = submission_queue.front();
     submission_queue.pop_front();
     submission_mutex.unlock();
     
+    SubmissionInfo* submission_info = (SubmissionInfo*)submission.pointer;
+    PresentInfo* presentation_info  = (PresentInfo*)submission.pointer;
     VkSubmitInfo submit_info{};
-    submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
-    submit_info.pNext = nullptr;
-    
-    submit_info.waitSemaphoreCount = (uint32_t)submission_info.wait_semaphores.size();
-    submit_info.pWaitSemaphores    = submission_info.wait_semaphores.data();
-    submit_info.pWaitDstStageMask  = &submission_info.wait_stage_flags;
-
-    submit_info.signalSemaphoreCount = (uint32_t)submission_info.signal_semaphores.size();
-    submit_info.pSignalSemaphores    = submission_info.signal_semaphores.data();
-    
-    submit_info.commandBufferCount = 1;
-    submit_info.pCommandBuffers    = &submission_info.record_buffer->vk_command_buffer;
-    
-    VkQueue submission_queue;
-    switch(submission_info.submission_queue){
+    switch(submission.queue){
         case SubmissionQueue::Graphics:
-            submission_queue = render_context->graphics_queue.vk_queue;
+            submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+            submit_info.pNext = nullptr;
+            
+            submit_info.waitSemaphoreCount = (uint32_t)submission_info->wait_semaphores.size();
+            submit_info.pWaitSemaphores    = submission_info->wait_semaphores.data();
+            submit_info.pWaitDstStageMask  = &submission_info->wait_stage_flags;
+
+            submit_info.signalSemaphoreCount = (uint32_t)submission_info->signal_semaphores.size();
+            submit_info.pSignalSemaphores    = submission_info->signal_semaphores.data();
+            
+            submit_info.commandBufferCount = 1;
+            submit_info.pCommandBuffers    = &submission_info->record_buffer->vk_command_buffer;
+            
+            vkQueueSubmit(render_context->graphics_queue.vk_queue, 1, &submit_info, submission_info->fence);
+            delete submission_info;
             break;
         case SubmissionQueue::Compute:
-            submission_queue = render_context->graphics_queue.vk_queue;
+            submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+            submit_info.pNext = nullptr;
+            
+            submit_info.waitSemaphoreCount = (uint32_t)submission_info->wait_semaphores.size();
+            submit_info.pWaitSemaphores    = submission_info->wait_semaphores.data();
+            submit_info.pWaitDstStageMask  = &submission_info->wait_stage_flags;
+
+            submit_info.signalSemaphoreCount = (uint32_t)submission_info->signal_semaphores.size();
+            submit_info.pSignalSemaphores    = submission_info->signal_semaphores.data();
+            
+            submit_info.commandBufferCount = 1;
+            submit_info.pCommandBuffers    = &submission_info->record_buffer->vk_command_buffer;
+            
+            vkQueueSubmit(render_context->graphics_queue.vk_queue, 1, &submit_info, submission_info->fence);
+            delete submission_info;
+            break;
+            break;
+            
+        case SubmissionQueue::Present:
+            VkPresentInfoKHR present_info{};
+            present_info.sType = VK_STRUCTURE_TYPE_PRESENT_INFO_KHR;
+            present_info.pNext = nullptr;
+            present_info.swapchainCount = (uint32_t)presentation_info->swapchains.size();
+            present_info.pSwapchains    = presentation_info->swapchains.data();
+            present_info.pImageIndices  = presentation_info->image_indices.data();
+            present_info.waitSemaphoreCount = (uint32_t)presentation_info->wait_semaphores.size();
+            present_info.pWaitSemaphores    = presentation_info->wait_semaphores.data();
+            vkQueuePresentKHR(render_context->graphics_queue.vk_queue, &present_info);
+            delete presentation_info;
             break;
     }
-    vkQueueSubmit(submission_queue, 1, &submit_info, submission_info.fence);
 }
 }

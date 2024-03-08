@@ -35,6 +35,8 @@ int main(int argc, char** argv){
     pipeline_info.front_face = FrontFace::CounterClockwise;
     pipeline_info.cull_mode  = CullMode::BackFace;
     Pipeline* pipeline = new Pipeline(pipeline_info);
+    delete vertex_shader;
+    delete fragment_shader;
     
     VkSemaphoreCreateInfo semaphore_create_info{};
     semaphore_create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -52,9 +54,8 @@ int main(int argc, char** argv){
     fence_create_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
     VkFence render_complete_fence;
     vkCreateFence(render_context->vk_device, &fence_create_info, nullptr, &render_complete_fence);
-    
-    auto record_buffer  = new RecordBuffer();
-    
+        
+    bool submission_fence = true;
     bool  running = true;
     while(running){
         SDL_Event event;
@@ -66,11 +67,14 @@ int main(int argc, char** argv){
             }
         }
         
+        render_manager->WaitForSubmission(&submission_fence);
+        
         vkWaitForFences(render_context->vk_device, 1, &render_complete_fence, VK_TRUE, UINT64_MAX);
         vkResetFences(render_context->vk_device, 1, &render_complete_fence);
         
+        auto record_buffer  = RecordBuffer();
         uint32_t image_index = swapchain->AcquireImage(swapchain_semaphore, VK_NULL_HANDLE);
-        record_buffer->Enqueue([render_buffer, swapchain, image_index, pipeline](VkCommandBuffer vk_command_buffer){
+        record_buffer.Enqueue([render_buffer, swapchain, image_index, pipeline](VkCommandBuffer vk_command_buffer){
             render_buffer->Begin(vk_command_buffer, swapchain, image_index);
             pipeline->Bind(vk_command_buffer);
             
@@ -90,34 +94,33 @@ int main(int argc, char** argv){
             vkCmdEndRenderPass(vk_command_buffer);
         });
         
-        SubmissionInfo submission_info{};
-        submission_info.record_buffer = record_buffer;
-        submission_info.fence = render_complete_fence;
-        submission_info.wait_semaphores = {swapchain_semaphore};
-        submission_info.signal_semaphores = {render_finished_semaphore};
-        submission_info.wait_stage_flags  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        render_manager->Submit(SubmissionQueue::Graphics, submission_info);
+        SubmitInfo submit_info{};
+        submit_info.fence = render_complete_fence;
+        submit_info.wait_semaphores = {swapchain_semaphore};
+        submit_info.signal_semaphores = {render_finished_semaphore};
+        submit_info.wait_stage_flags  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        render_manager->SubmitGraphics(submit_info, record_buffer);
         
-        render_manager->Record();
-        render_manager->Submit();
+        //render_manager->HandleGraphicsRecording ();
+        //render_manager->HandleSubmission();
         
         PresentInfo present_info{};
         present_info.wait_semaphores = {render_finished_semaphore};
         present_info.swapchains = {swapchain->vk_swapchain_};
         present_info.image_indices = {image_index};
         render_manager->Present(present_info);
-        render_manager->Submit();
+
+        render_manager->InsertSubmissionFence(&submission_fence);
     }
     
     vkDeviceWaitIdle(render_context->vk_device);
+    delete render_manager;
+    
     vkDestroySemaphore(render_context->vk_device, swapchain_semaphore, nullptr);
     vkDestroySemaphore(render_context->vk_device, render_finished_semaphore, nullptr);
     vkDestroyFence(render_context->vk_device, render_complete_fence, nullptr);
     
-    delete vertex_shader;
-    delete fragment_shader;
     delete pipeline;
-    delete render_manager;
     delete render_buffer;
     delete swapchain;
     delete allocator;

@@ -34,13 +34,32 @@ struct MemoryAllocation{
     size_t offset;
     size_t size;
 };
+struct Buffer{
+    Buffer(){};
+    MemoryType memory_type;
+    MemoryAllocation memory_allocation;
+    RegionList region_list;
+    VkBuffer vk_buffer;
+    char* mapped_pointer;
+};
+struct BufferAllocation{
+    uint8_t resource_index;
+    size_t offset;
+    size_t size;
+};
 class Allocator{
 public:
+    ~Allocator();
+    
     const MemoryAllocation Malloc(MemoryType desired_memory_type,
                                   size_t size, size_t alignment, uint32_t memory_type_bits);
     void Free(const MemoryAllocation allocation);
     
+    const BufferAllocation Balloc(MemoryType desired_memory_type, size_t size, size_t alignment);
+    void Free(const BufferAllocation allocation);
+    
     std::vector<DeviceMemory> device_allocations_;
+    std::vector<Buffer> buffers_;
 };
 extern Allocator* allocator;
 }

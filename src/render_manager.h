@@ -55,7 +55,7 @@ public:
     
     void ResetFence(bool& submission_fence);
     void InsertSubmissionFence(bool* fence);
-    void WaitForSubmission(bool* fence);
+    void WaitForFence(bool* fence);
     
     void HandleGraphicsRecording();
     void HandleSubmission();

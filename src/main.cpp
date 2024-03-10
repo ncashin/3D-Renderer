@@ -20,12 +20,13 @@ int main(int argc, char** argv){
     render_context = new RenderContext(window, true, "engine", "engine");
     allocator      = new Allocator();
     auto swapchain = new Swapchain(window);
-    auto render_buffer = new RenderBuffer(swapchain);
-    
+    auto render_buffer  = new RenderBuffer(swapchain);
     auto render_manager = new RenderManager();
     
     Shader* vertex_shader   = new Shader(ShaderStage::Vertex, ShaderCodeFormat::Spirv, "vert.spv");
     Shader* fragment_shader = new Shader(ShaderStage::Fragment, ShaderCodeFormat::Spirv, "frag.spv");
+    
+    auto buffer_allocation = allocator->Balloc(MemoryType::Coherent, 1024, 0);
     
     PipelineInfo pipeline_info{};
     pipeline_info.render_buffer = render_buffer;
@@ -56,9 +57,9 @@ int main(int argc, char** argv){
     vkCreateFence(render_context->vk_device, &fence_create_info, nullptr, &render_complete_fence);
         
     bool submission_fence = true;
-    bool  running = true;
+    bool running = true;
     while(running){
-        SDL_Event event;
+        SDL_Event event;	
         while(SDL_PollEvent(&event)){
             switch(event.type){
                 case SDL_EventType::SDL_QUIT:
@@ -67,12 +68,12 @@ int main(int argc, char** argv){
             }
         }
         
-        render_manager->WaitForSubmission(&submission_fence);
+        render_manager->WaitForFence(&submission_fence);
         
         vkWaitForFences(render_context->vk_device, 1, &render_complete_fence, VK_TRUE, UINT64_MAX);
         vkResetFences(render_context->vk_device, 1, &render_complete_fence);
         
-        auto record_buffer  = RecordBuffer();
+        auto record_buffer = RecordBuffer();
         uint32_t image_index = swapchain->AcquireImage(swapchain_semaphore, VK_NULL_HANDLE);
         record_buffer.Enqueue([render_buffer, swapchain, image_index, pipeline](VkCommandBuffer vk_command_buffer){
             render_buffer->Begin(vk_command_buffer, swapchain, image_index);
@@ -96,14 +97,11 @@ int main(int argc, char** argv){
         
         SubmitInfo submit_info{};
         submit_info.fence = render_complete_fence;
-        submit_info.wait_semaphores = {swapchain_semaphore};
+        submit_info.wait_semaphores   = {swapchain_semaphore};
         submit_info.signal_semaphores = {render_finished_semaphore};
         submit_info.wait_stage_flags  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         render_manager->SubmitGraphics(submit_info, record_buffer);
-        
-        //render_manager->HandleGraphicsRecording ();
-        //render_manager->HandleSubmission();
-        
+
         PresentInfo present_info{};
         present_info.wait_semaphores = {render_finished_semaphore};
         present_info.swapchains = {swapchain->vk_swapchain_};
@@ -113,9 +111,7 @@ int main(int argc, char** argv){
         render_manager->InsertSubmissionFence(&submission_fence);
     }
     
-    vkDeviceWaitIdle(render_context->vk_device);
     delete render_manager;
-    
     vkDestroySemaphore(render_context->vk_device, swapchain_semaphore, nullptr);
     vkDestroySemaphore(render_context->vk_device, render_finished_semaphore, nullptr);
     vkDestroyFence(render_context->vk_device, render_complete_fence, nullptr);

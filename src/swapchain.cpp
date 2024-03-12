@@ -1,7 +1,7 @@
 #include "swapchain.h"
 
 namespace engine{
-Swapchain::Swapchain(Window* window){
+Swapchain::Swapchain(std::unique_ptr<Window>& window){
     vk_surface_ = window->CreateVulkanSurface(render_context->vk_instance);
     
     uint32_t available_format_count;

@@ -5,6 +5,9 @@
 namespace engine{
 class Window{
 public:
+    static void Init();
+    
+public:
     Window(const char* name, int width, int height, int x = 0, int y = 0);
     ~Window();
     

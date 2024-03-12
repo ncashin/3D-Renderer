@@ -4,7 +4,7 @@
 namespace engine{
 class Swapchain{
 public:
-    Swapchain(Window* window);
+    Swapchain(std::unique_ptr<Window>& window);
     ~Swapchain();
     
     uint32_t AcquireImage(VkSemaphore semaphore, VkFence fence);

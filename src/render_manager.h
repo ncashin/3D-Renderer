@@ -7,50 +7,44 @@
 #include <thread>
 
 namespace engine{
-enum class SubmissionType{
-    Graphics,
-    Compute,
+enum NGFX_SubmissionType{
+    NGFX_SUBMISSION_TYPE_GRAPHICS,
+    NGFX_SUBMISSION_TYPE_COMPUTE,
     
-    Present,
+    NGFX_SUBMISSION_TYPE_PRESENT,
     
-    Fence,
+    NGFX_SUBMISSION_TYPE_FENCE,
     
-    ProcessEndSignal,
-};
-class RecordBuffer{
-public:
-    void Enqueue(std::function<void(VkCommandBuffer)> function);
-    void Record(VkCommandBuffer vk_command_buffer);
-    
-    std::vector<std::function<void(VkCommandBuffer)>> function_vector;
+    NGFX_SUBMISSION_TYPE_EXIT,
 };
 struct SubmitInfo{
     std::vector<VkSemaphore> wait_semaphores;
-    VkPipelineStageFlags wait_stage_flags;
+    VkPipelineStageFlags     wait_stage_flags;
     std::vector<VkSemaphore> signal_semaphores;
-    VkFence fence;
+    VkFence                  fence;
     VkCommandBuffer* vk_command_buffer;
 };
 struct PresentInfo{
-    std::vector<VkSemaphore> wait_semaphores;
+    std::vector<VkSemaphore>    wait_semaphores;
     std::vector<VkSwapchainKHR> swapchains;
-    std::vector<uint32_t> image_indices;
+    std::vector<uint32_t>       image_indices;
 };
+
 class RenderManager{
     struct RecordingInfo{
         VkCommandBuffer* vk_command_buffer;
-        RecordBuffer record_buffer;
+        std::function<void(VkCommandBuffer)> function;
     };
     struct SubmissionInfo{
-        SubmissionType type;
+        NGFX_SubmissionType type;
         void* pointer;
     };
 public:
     RenderManager();
     ~RenderManager();
         
-    void SubmitGraphics(SubmitInfo submission_info, RecordBuffer record_buffer);
-    void SubmitCompute (SubmitInfo submission_info, RecordBuffer record_buffer);
+    void SubmitGraphics(SubmitInfo submission_info, std::function<void(VkCommandBuffer)> record_function);
+    void SubmitCompute (SubmitInfo submission_info, std::function<void(VkCommandBuffer)> record_function);
     void Present(PresentInfo present_info);
     
     void ResetFence(bool& submission_fence);

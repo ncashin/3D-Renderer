@@ -1,6 +1,11 @@
 #include "window.h"
 
 namespace engine{
+void Window::Init(){
+    SDL_Init(SDL_INIT_EVERYTHING);
+}
+
+
 Window::Window(const char* name, int width, int height, int x, int y){
     window_ = SDL_CreateWindow(name, x, y, width, height, SDL_WINDOW_RESIZABLE | SDL_WINDOW_VULKAN);
 }

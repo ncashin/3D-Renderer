@@ -35,7 +35,7 @@ DeviceHeap::DeviceHeap(VkDeviceSize minimum_allocation, VkDeviceSize maximum_all
 : minimum_allocation(minimum_allocation), maximum_allocated_size(maximum_allocated_size) {};
 
 RenderContext* render_context = nullptr;
-RenderContext::RenderContext(Window* window, const bool enable_validation_layers,
+RenderContext::RenderContext(std::unique_ptr<Window>& window, const bool enable_validation_layers,
                              const char* applcation_name, const char* engine_name){
     std::vector<const char*> extension_names;
     extension_names.emplace_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);

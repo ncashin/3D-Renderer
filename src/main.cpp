@@ -12,29 +12,31 @@
 
 using namespace engine;
 
+
+
 int main(int argc, char** argv){
     SDL_Init(SDL_INIT_EVERYTHING);
     SDL_DisplayMode display_mode;
     SDL_GetCurrentDisplayMode(0, &display_mode);
-    auto window = new Window("engine", display_mode.w, display_mode.h);
+    auto window = std::make_unique<Window>("engine", display_mode.w, display_mode.h);
+    
     render_context = new RenderContext(window, true, "engine", "engine");
     allocator      = new Allocator();
-    auto swapchain = new Swapchain(window);
-    auto render_buffer  = new RenderBuffer(swapchain);
     auto render_manager = new RenderManager();
+    auto swapchain      = new Swapchain(window);
+    auto render_buffer  = new RenderBuffer(swapchain);
     
-    Shader* vertex_shader   = new Shader(ShaderStage::Vertex, ShaderCodeFormat::Spirv, "vert.spv");
-    Shader* fragment_shader = new Shader(ShaderStage::Fragment, ShaderCodeFormat::Spirv, "frag.spv");
+    Shader* vertex_shader   = new Shader({NGFX_SHADER_STAGE_VERTEX,   NGFX_SHADER_FORMAT_SPIRV, "vert.spv"});
+    Shader* fragment_shader = new Shader({NGFX_SHADER_STAGE_FRAGMENT, NGFX_SHADER_FORMAT_SPIRV, "frag.spv"});
     
-    auto buffer_allocation = allocator->Balloc(MemoryType::Coherent, 1024, 0);
     
     PipelineInfo pipeline_info{};
     pipeline_info.render_buffer = render_buffer;
     pipeline_info.vertex_attributes = {};
-    pipeline_info.vertex_bindings = {};
-    pipeline_info.shaders = { vertex_shader, fragment_shader };
-    pipeline_info.front_face = FrontFace::CounterClockwise;
-    pipeline_info.cull_mode  = CullMode::BackFace;
+    pipeline_info.vertex_bindings   = {};
+    pipeline_info.shaders  = { vertex_shader, fragment_shader };
+    pipeline_info.front_face = NGFX_FRONT_FACE_CCW;
+    pipeline_info.cull_mode  = NGFX_CULL_MODE_BACK_FACE;
     Pipeline* pipeline = new Pipeline(pipeline_info);
     delete vertex_shader;
     delete fragment_shader;
@@ -69,13 +71,21 @@ int main(int argc, char** argv){
         }
         
         render_manager->WaitForFence(&submission_fence);
-        
+
         vkWaitForFences(render_context->vk_device, 1, &render_complete_fence, VK_TRUE, UINT64_MAX);
         vkResetFences(render_context->vk_device, 1, &render_complete_fence);
         
-        auto record_buffer = RecordBuffer();
         uint32_t image_index = swapchain->AcquireImage(swapchain_semaphore, VK_NULL_HANDLE);
-        record_buffer.Enqueue([render_buffer, swapchain, image_index, pipeline](VkCommandBuffer vk_command_buffer){
+        
+        SubmitInfo submit_info{};
+        submit_info.fence             = render_complete_fence;
+        submit_info.wait_semaphores   = {swapchain_semaphore};
+        submit_info.signal_semaphores = {render_finished_semaphore};
+        submit_info.wait_stage_flags  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+        
+        render_manager->SubmitGraphics(submit_info,
+                                       [render_buffer, swapchain, image_index, pipeline]
+                                       (VkCommandBuffer vk_command_buffer){
             render_buffer->Begin(vk_command_buffer, swapchain, image_index);
             pipeline->Bind(vk_command_buffer);
             
@@ -92,26 +102,21 @@ int main(int argc, char** argv){
             vkCmdSetScissor(vk_command_buffer, 0, 1, &scissor);
             
             vkCmdDraw(vk_command_buffer, 3, 1, 0, 0);
+            
             vkCmdEndRenderPass(vk_command_buffer);
         });
-        
-        SubmitInfo submit_info{};
-        submit_info.fence = render_complete_fence;
-        submit_info.wait_semaphores   = {swapchain_semaphore};
-        submit_info.signal_semaphores = {render_finished_semaphore};
-        submit_info.wait_stage_flags  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
-        render_manager->SubmitGraphics(submit_info, record_buffer);
 
         PresentInfo present_info{};
         present_info.wait_semaphores = {render_finished_semaphore};
-        present_info.swapchains = {swapchain->vk_swapchain_};
-        present_info.image_indices = {image_index};
+        present_info.swapchains      = {swapchain->vk_swapchain_};
+        present_info.image_indices   = {image_index};
         render_manager->Present(present_info);
 
         render_manager->InsertSubmissionFence(&submission_fence);
     }
     
     delete render_manager;
+    
     vkDestroySemaphore(render_context->vk_device, swapchain_semaphore, nullptr);
     vkDestroySemaphore(render_context->vk_device, render_finished_semaphore, nullptr);
     vkDestroyFence(render_context->vk_device, render_complete_fence, nullptr);
@@ -121,5 +126,4 @@ int main(int argc, char** argv){
     delete swapchain;
     delete allocator;
     delete render_context;
-    delete window;
 }

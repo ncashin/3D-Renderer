@@ -38,7 +38,7 @@ struct DeviceHeap{
 };
 class RenderContext{
 public:
-    RenderContext(Window* window, const bool enable_validation_layers,
+    RenderContext(std::unique_ptr<Window>& window, const bool enable_validation_layers,
                   const char* applcation_name, const char* engine_name);
     ~RenderContext();
     

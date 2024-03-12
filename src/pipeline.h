@@ -7,17 +7,18 @@
 #include "render_buffer.h"
 
 namespace engine{
-enum class ShaderStage{
-    Vertex   = 0x00000001,
-    Fragment = 0x00000010,
+enum NGFX_ShaderStage{
+    NGFX_SHADER_STAGE_VERTEX   = 0x00000001,
+    NGFX_SHADER_STAGE_FRAGMENT = 0x00000010,
 };
-enum class ShaderCodeFormat{
-    Spirv,
-    Glsl,
+enum NGFX_ShaderFormat{
+    NGFX_SHADER_FORMAT_GLSL,
+    NGFX_SHADER_FORMAT_SPIRV,
 };
 struct ShaderInfo{
-    ShaderStage shader_type;
-    ShaderCodeFormat shader_code_format;
+    NGFX_ShaderStage  shader_stage;
+    NGFX_ShaderFormat shader_code_format;
+    const char* filepath;
     size_t buffer_size;
     char* buffer;
 };
@@ -27,16 +28,16 @@ public:
     static VkShaderModule CompileSpirv(size_t buffer_size, char* buffer);
     
 public:
-    Shader(ShaderStage shader_stage, ShaderCodeFormat shader_code_format, size_t buffer_size, char* buffer);
-    Shader(ShaderStage shader_stage, ShaderCodeFormat shader_code_format, const char* filepath);
+    Shader(NGFX_ShaderStage shader_stage, NGFX_ShaderFormat shader_code_format, size_t buffer_size, char* buffer);
+    Shader(ShaderInfo info);
     ~Shader();
     
-    ShaderStage GetStage();
+    NGFX_ShaderStage GetStage();
     VkShaderModule GetModule();
     
 private:
-    ShaderStage shader_stage_;
-    VkShaderModule vk_shader_module_;
+    NGFX_ShaderStage shader_stage_;
+    VkShaderModule   vk_shader_module_;
 };
 
 struct VertexBinding{
@@ -69,15 +70,15 @@ struct VertexAttribute{
     AttributeFormat format;
     uint32_t offset;
 };
-enum class FrontFace{
-    CounterClockwise = 0,
-    Clockwise = 1,
+enum NGFX_FrontFace{
+    NGFX_FRONT_FACE_CCW= 0,
+    NGFX_FRONT_FACE_CW = 1,
 };
-enum class CullMode{
-    None = 0,
-    FrontFace = 1,
-    BackFace = 2,
-    FrontAndBackFace = 3,
+enum NGFX_CullMode{
+    NGFX_CULL_MODE_NONE = 0,
+    NGFX_CULL_MODE_FRONT_FACE = 1,
+    NGFX_CULL_MODE_BACK_FACE = 2,
+    NGFX_CULL_MODE_FRONT_AND_BACK_FACE = 3,
 };
 struct PipelineInfo{
     RenderBuffer* render_buffer;
@@ -86,8 +87,8 @@ struct PipelineInfo{
     std::vector<VertexBinding>   vertex_bindings;
     std::vector<VertexAttribute> vertex_attributes;
     
-    FrontFace front_face = FrontFace::Clockwise;
-    CullMode cull_mode = CullMode::None;
+    NGFX_FrontFace front_face = NGFX_FRONT_FACE_CW;
+    NGFX_CullMode  cull_mode  = NGFX_CULL_MODE_NONE;
 };
 class Pipeline {
 public:
@@ -104,10 +105,9 @@ private:
     VkPipeline vk_pipeline_;
 };
 
-struct ShaderFileCompilationInfo{
+struct ShaderCompilationInfo{
     Shader* shader;
-    ShaderCodeFormat shader_code_format;
-    const char* filepath;
+    ShaderInfo shader_info{};
 };
 struct PipelineCompilationInfo{
     Pipeline* pipeline;

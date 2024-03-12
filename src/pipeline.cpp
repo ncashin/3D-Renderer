@@ -21,19 +21,19 @@ VkShaderModule Shader::CompileSpirv(size_t buffer_size, char* buffer){
 }
 
 // --- Member Functions --- //
-Shader::Shader(ShaderStage shader_stage, ShaderCodeFormat shader_code_format, size_t buffer_size, char* buffer)
+Shader::Shader(NGFX_ShaderStage shader_stage, NGFX_ShaderFormat shader_code_format, size_t buffer_size, char* buffer)
 : shader_stage_(shader_stage) {
     switch(shader_code_format){
-        case ShaderCodeFormat::Glsl:
+        case NGFX_SHADER_FORMAT_GLSL:
             break;
-        case ShaderCodeFormat::Spirv:
+        case NGFX_SHADER_FORMAT_SPIRV:
             vk_shader_module_ = CompileSpirv(buffer_size, buffer);
             break;
     }
 }
-Shader::Shader(ShaderStage shader_stage, ShaderCodeFormat shader_code_format, const char* filepath)
-: shader_stage_(shader_stage) {
-    std::ifstream file(filepath);
+Shader::Shader(ShaderInfo info)
+: shader_stage_(info.shader_stage) {
+    std::ifstream file(info.filepath);
     file.seekg(0, std::ios::end);
     size_t size = file.tellg();
     file.seekg(0);
@@ -41,10 +41,10 @@ Shader::Shader(ShaderStage shader_stage, ShaderCodeFormat shader_code_format, co
     char* buffer = new char[size];
     file.read(buffer, size);
     
-    switch(shader_code_format){
-        case ShaderCodeFormat::Glsl:
+    switch(info.shader_code_format){
+        case NGFX_SHADER_FORMAT_GLSL:
             break;
-        case ShaderCodeFormat::Spirv:
+        case NGFX_SHADER_FORMAT_SPIRV:
             vk_shader_module_ = CompileSpirv(size, buffer);
             break;
     }
@@ -53,7 +53,7 @@ Shader::~Shader(){
     vkDestroyShaderModule(render_context->vk_device, vk_shader_module_, nullptr);
 }
 
-ShaderStage Shader::GetStage(){
+NGFX_ShaderStage Shader::GetStage(){
     return shader_stage_;
 }
 VkShaderModule Shader::GetModule(){
@@ -63,7 +63,6 @@ VkShaderModule Shader::GetModule(){
 // --- Pipeline --- //
 Pipeline::Pipeline(){}
 Pipeline::Pipeline(PipelineInfo pipeline_info){ Initialize(pipeline_info); }
-
 Pipeline::~Pipeline(){
     vkDestroyPipeline(render_context->vk_device, vk_pipeline_, nullptr);
     vkDestroyPipelineLayout(render_context->vk_device, vk_pipeline_layout_, nullptr);

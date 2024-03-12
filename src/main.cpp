@@ -12,8 +12,6 @@
 
 using namespace engine;
 
-
-
 int main(int argc, char** argv){
     SDL_Init(SDL_INIT_EVERYTHING);
     SDL_DisplayMode display_mode;
@@ -110,6 +108,7 @@ int main(int argc, char** argv){
         present_info.wait_semaphores = {render_finished_semaphore};
         present_info.swapchains      = {swapchain->vk_swapchain_};
         present_info.image_indices   = {image_index};
+        
         render_manager->Present(present_info);
 
         render_manager->InsertSubmissionFence(&submission_fence);

@@ -24,7 +24,7 @@ struct VulkanQueueIndices{
 };
 VulkanQueueIndices QueryQueueIndices(VkPhysicalDevice vk_physical_device);
 
-struct VulkanQueue{
+struct DeviceQueue{
     uint32_t vk_family_index;
     VkQueue  vk_queue;
 };
@@ -47,10 +47,10 @@ public:
     
     VkPhysicalDevice vk_physical_device;
     VkDevice vk_device;
-    VulkanQueue graphics_queue;
-    VulkanQueue compute_queue;
-    VulkanQueue transfer_queue;
-    VulkanQueue present_queue;
+    DeviceQueue graphics_queue;
+    DeviceQueue compute_queue;
+    DeviceQueue transfer_queue;
+    DeviceQueue present_queue;
     
     std::vector<DeviceHeap> device_heaps;
 };

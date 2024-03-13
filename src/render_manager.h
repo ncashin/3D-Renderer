@@ -47,9 +47,9 @@ public:
     void SubmitCompute (SubmitInfo submission_info, std::function<void(VkCommandBuffer)> record_function);
     void Present(PresentInfo present_info);
     
-    void ResetFence(bool& submission_fence);
+    void ResetSubmissionFence(bool& submission_fence);
     void InsertSubmissionFence(bool* fence);
-    void WaitForFence(bool* fence);
+    void WaitForSubmissionFence(bool* fence);
     
     void HandleGraphicsRecording();
     void HandleSubmission();

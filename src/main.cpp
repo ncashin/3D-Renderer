@@ -26,13 +26,12 @@ int main(int argc, char** argv){
     
     Shader* vertex_shader   = new Shader({NGFX_SHADER_STAGE_VERTEX,   NGFX_SHADER_FORMAT_SPIRV, "vert.spv"});
     Shader* fragment_shader = new Shader({NGFX_SHADER_STAGE_FRAGMENT, NGFX_SHADER_FORMAT_SPIRV, "frag.spv"});
-    
-    
+        
     PipelineInfo pipeline_info{};
     pipeline_info.render_buffer = render_buffer;
     pipeline_info.vertex_attributes = {};
     pipeline_info.vertex_bindings   = {};
-    pipeline_info.shaders  = { vertex_shader, fragment_shader };
+    pipeline_info.shaders = { vertex_shader, fragment_shader };
     pipeline_info.front_face = NGFX_FRONT_FACE_CCW;
     pipeline_info.cull_mode  = NGFX_CULL_MODE_BACK_FACE;
     Pipeline* pipeline = new Pipeline(pipeline_info);
@@ -68,7 +67,7 @@ int main(int argc, char** argv){
             }
         }
         
-        render_manager->WaitForFence(&submission_fence);
+        render_manager->WaitForSubmissionFence(&submission_fence);
 
         vkWaitForFences(render_context->vk_device, 1, &render_complete_fence, VK_TRUE, UINT64_MAX);
         vkResetFences(render_context->vk_device, 1, &render_complete_fence);
@@ -103,15 +102,15 @@ int main(int argc, char** argv){
             
             vkCmdEndRenderPass(vk_command_buffer);
         });
-
+        
+        render_manager->InsertSubmissionFence(&submission_fence);
+        
         PresentInfo present_info{};
         present_info.wait_semaphores = {render_finished_semaphore};
         present_info.swapchains      = {swapchain->vk_swapchain_};
         present_info.image_indices   = {image_index};
         
         render_manager->Present(present_info);
-
-        render_manager->InsertSubmissionFence(&submission_fence);
     }
     
     delete render_manager;

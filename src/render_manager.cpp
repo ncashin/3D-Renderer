@@ -95,14 +95,14 @@ void RenderManager::InsertSubmissionFence(bool* fence){
     submission_mutex.unlock();
     submission_condition_variable.notify_one();
 }
-void RenderManager::WaitForFence(bool* submission_fence){
+void RenderManager::WaitForSubmissionFence(bool* submission_fence){
     std::unique_lock<std::mutex> lock(fence_mutex);
     fence_condition_variable.wait(lock, [submission_fence]{
         return *submission_fence;
     });
     *submission_fence = false;
 }
-void RenderManager::ResetFence(bool& submission_fence){
+void RenderManager::ResetSubmissionFence(bool& submission_fence){
     fence_mutex.lock();
     submission_fence = false;
     fence_mutex.unlock();

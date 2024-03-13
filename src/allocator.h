@@ -40,12 +40,20 @@ struct Buffer{
     MemoryAllocation memory_allocation;
     RegionList region_list;
     VkBuffer vk_buffer;
-    char* mapped_pointer;
 };
 struct BufferAllocation{
     uint8_t resource_index;
     size_t offset;
     size_t size;
+};
+struct BufferBarrier{
+    VkAccessFlags source_access_flags;
+    VkAccessFlags destination_access_flags;
+    
+    uint32_t source_queue_family;
+    uint32_t destination_queue_family;
+    
+    BufferAllocation buffer_allocation;
 };
 class Allocator{
 public:
@@ -58,6 +66,12 @@ public:
     const BufferAllocation Balloc(MemoryType desired_memory_type, size_t size, size_t alignment);
     void Free(const BufferAllocation allocation);
     
+    void InsertImageAcquisitionBarrier();
+    void InsertImageReleaseBarrier();
+
+    void InsertBufferAcquisitionBarrier();
+    void InsertBufferReleaseBarrier();
+
     std::vector<DeviceMemory> device_allocations_;
     std::vector<Buffer> buffers_;
 };

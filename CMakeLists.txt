@@ -7,7 +7,10 @@ set(SOURCE_FILES src/main.cpp
 src/window.h src/window.cpp 
 src/vkutil.h src/vkutil.cpp
 src/render_context.h src/render_context.cpp
+Src/allocation.h
 src/allocator.h src/allocator.cpp
+src/buffer.h src/buffer.cpp
+src/image.h src/image.cpp
 src/swapchain.h src/swapchain.cpp
 src/render_buffer.h src/render_buffer.cpp
 src/pipeline.h src/pipeline.cpp

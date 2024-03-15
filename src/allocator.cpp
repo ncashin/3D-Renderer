@@ -45,20 +45,26 @@ void RegionList::FreeRegion(Region free_memory){
 
 Allocator* allocator = nullptr;
 Allocator::~Allocator(){
-    for(Buffer buffer : buffers_){
-        vkDestroyBuffer(render_context->vk_device, buffer.vk_buffer, nullptr);
-    }
     for(DeviceMemory memory : device_allocations_){
         vkFreeMemory(render_context->vk_device, memory.vk_memory, nullptr);
     }
 }
 
-const MemoryAllocation Allocator::Malloc(MemoryType desired_memory_type,
-                                         size_t size, size_t alignment, uint32_t memory_type_bits){
+MemoryAllocation Allocator::Malloc(NGFX_MemoryType desired_memory_type,
+                                   VkMemoryRequirements memory_requirements){
+    return Malloc(desired_memory_type,
+                  memory_requirements.size, memory_requirements.alignment, memory_requirements.memoryTypeBits);
+}
+MemoryAllocation Allocator::Malloc(NGFX_MemoryType desired_memory_type,
+                                   size_t size, size_t alignment, uint32_t memory_type_bits){
     VkMemoryPropertyFlags required_properties{};
     switch(desired_memory_type){
-        case MemoryType::DeviceLocal: required_properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;  break;
-        case MemoryType::Coherent:    required_properties = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT; break;
+        case NGFX_MemoryType::NGFX_MEMORY_TYPE_DEVICE_LOCAL:
+            required_properties = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
+            break;
+        case NGFX_MemoryType::NGFX_MEMORY_TYPE_COHERENT:
+            required_properties = VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+            break;
     }
     
     VkPhysicalDeviceMemoryProperties memory_properties{};
@@ -84,7 +90,7 @@ const MemoryAllocation Allocator::Malloc(MemoryType desired_memory_type,
         uint8_t heap_index = memory_properties.memoryTypes[i].heapIndex;
         DeviceHeap& heap = render_context->device_heaps[heap_index];
         if(heap.allocated_size + size > heap.maximum_allocated_size){
-            return;
+            continue;
         }
         VkDeviceSize new_allocation_size = size;
         if(new_allocation_size < heap.minimum_allocation &&
@@ -103,7 +109,7 @@ const MemoryAllocation Allocator::Malloc(MemoryType desired_memory_type,
         new_memory.region_list = { 0, new_allocation_size };
         new_memory.vk_memory_type_index = i;
         vkAllocateMemory(render_context->vk_device, &allocate_info, nullptr, &new_memory.vk_memory);
-        if(desired_memory_type == MemoryType::Coherent){
+        if(desired_memory_type == NGFX_MemoryType::NGFX_MEMORY_TYPE_COHERENT){
             vkMapMemory(render_context->vk_device,
                         new_memory.vk_memory, 0, VK_WHOLE_SIZE, 0, (void**)&new_memory.mapped_pointer);
         }
@@ -113,67 +119,37 @@ const MemoryAllocation Allocator::Malloc(MemoryType desired_memory_type,
     }
     return MemoryAllocation{};
 }
-void Allocator::Free(const MemoryAllocation allocation){
+void Allocator::Free(MemoryAllocation allocation){
     device_allocations_[allocation.resource_index].region_list.FreeRegion({
         allocation.offset, allocation.size,
     });
 }
 
-const BufferAllocation Allocator::Balloc(MemoryType desired_memory_type, size_t size, size_t alignment){
-    for(uint8_t i = 0; i < buffers_.size(); i++){
-        Buffer& buffer = buffers_[i];
-        if(buffer.memory_type != desired_memory_type){
-            continue;
-        }
-        Region region{};
-        if(buffer.region_list.GetRegion(size, alignment, &region)){
-            continue;
-        }
-        return BufferAllocation{
-            i,
-            region.offset,
-            region.size,
-        };
-    }
-    
-    VkDeviceSize buffer_size = 8000000;
-    VkBufferCreateInfo create_info{};
-    create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    create_info.flags = 0;
-    create_info.pNext = nullptr;
-    
-    create_info.size = buffer_size;
-    create_info.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-                        VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT;
-    
-    create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
-    create_info.queueFamilyIndexCount = 1;
-    create_info.pQueueFamilyIndices = &render_context->graphics_queue.vk_family_index;
-    
-    Buffer buffer{};
-    vkCreateBuffer(render_context->vk_device, &create_info, nullptr, &buffer.vk_buffer);
-    
-    VkMemoryRequirements requirements{};
-    vkGetBufferMemoryRequirements(render_context->vk_device, buffer.vk_buffer, &requirements);
-    auto memory_allocation = Malloc(desired_memory_type,
-                                    requirements.size, requirements.alignment, requirements.memoryTypeBits);
-    vkBindBufferMemory(render_context->vk_device, buffer.vk_buffer,
-                       device_allocations_[memory_allocation.resource_index].vk_memory,
-                       memory_allocation.offset + (memory_allocation.offset % requirements.alignment));
-    buffer.memory_allocation = memory_allocation;
-    buffer.memory_type = desired_memory_type;
-    
-    uint8_t index = buffers_.size();
-    buffers_.emplace_back(buffer);
-    return BufferAllocation{
-        index,
-        0,
-        size,
-    };
+void Allocator::Allocate(NGFX_MemoryType memory_type, Buffer* buffer){
+    VkMemoryRequirements memory_requirements;
+    buffer->GetMemoryRequirements(&memory_requirements);
+    auto allocation = Malloc(memory_type, memory_requirements);
+    buffer->memory_allocation = allocation;
+    buffer->BindMemory(device_allocations_[allocation.resource_index].vk_memory, allocation.offset);
 }
-void Allocator::Free(const BufferAllocation allocation){
-    buffers_[allocation.resource_index].region_list.FreeRegion({
-        allocation.offset, allocation.size,
-    });
+void Allocator::Allocate(NGFX_MemoryType memory_type, Image* image){
+    VkMemoryRequirements memory_requirements;
+    image->GetMemoryRequirements(&memory_requirements);
+    auto allocation = Malloc(memory_type, memory_requirements);
+    image->memory_allocation = allocation;
+    image->BindMemory(device_allocations_[allocation.resource_index].vk_memory,
+                      allocation.offset + (allocation.offset % memory_requirements.alignment));
+}
+
+void Allocator::Free(Buffer* buffer){
+    Free(buffer->memory_allocation);
+}
+void Allocator::Free(Image*  image){
+    Free(image->memory_allocation);
+}
+
+void Allocator::Map(Buffer* buffer, char** pointer){
+    auto index = buffer->memory_allocation.resource_index;
+    *pointer = device_allocations_[index].mapped_pointer + buffer->memory_allocation.offset;
 }
 }

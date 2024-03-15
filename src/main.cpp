@@ -23,7 +23,7 @@ int main(int argc, char** argv){
     auto render_manager = new RenderManager();
     auto swapchain      = new Swapchain(window);
     auto render_buffer  = new RenderBuffer(swapchain);
-    
+
     Shader* vertex_shader   = new Shader({NGFX_SHADER_STAGE_VERTEX,   NGFX_SHADER_FORMAT_SPIRV, "vert.spv"});
     Shader* fragment_shader = new Shader({NGFX_SHADER_STAGE_FRAGMENT, NGFX_SHADER_FORMAT_SPIRV, "frag.spv"});
         
@@ -37,6 +37,16 @@ int main(int argc, char** argv){
     Pipeline* pipeline = new Pipeline(pipeline_info);
     delete vertex_shader;
     delete fragment_shader;
+
+    Buffer* buffer = new Buffer(1000000);
+    allocator->Allocate(NGFX_MEMORY_TYPE_COHERENT, buffer);
+    char* mapped_pointer;
+    allocator->Map(buffer, &mapped_pointer);
+    *mapped_pointer = 'A';
+    
+    
+    Image* image = new Image({100, 100, 1});
+    allocator->Allocate(NGFX_MEMORY_TYPE_DEVICE_LOCAL, image);
     
     VkSemaphoreCreateInfo semaphore_create_info{};
     semaphore_create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -81,11 +91,13 @@ int main(int argc, char** argv){
         submit_info.wait_stage_flags  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
         
         render_manager->SubmitGraphics(submit_info,
-                                       [render_buffer, swapchain, image_index, pipeline]
+                                       [render_buffer, swapchain, image_index, pipeline, buffer]
                                        (VkCommandBuffer vk_command_buffer){
             render_buffer->Begin(vk_command_buffer, swapchain, image_index);
             pipeline->Bind(vk_command_buffer);
             
+            buffer->BindAsVertexBuffer(vk_command_buffer, 0);
+
             VkViewport viewport{};
             viewport.width  = swapchain->extent_.width;
             viewport.height = swapchain->extent_.height;
@@ -112,8 +124,17 @@ int main(int argc, char** argv){
         
         render_manager->Present(present_info);
     }
-    
+        
+    render_manager->WaitForSubmissionFence(&submission_fence);
+    vkWaitForFences(render_context->vk_device, 1, &render_complete_fence, VK_TRUE, UINT64_MAX);
+    vkResetFences(render_context->vk_device, 1, &render_complete_fence);
     delete render_manager;
+    
+    allocator->Free(buffer);
+    delete buffer;
+    
+    allocator->Free(image);
+    delete image;
     
     vkDestroySemaphore(render_context->vk_device, swapchain_semaphore, nullptr);
     vkDestroySemaphore(render_context->vk_device, render_finished_semaphore, nullptr);

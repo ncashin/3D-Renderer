@@ -218,4 +218,8 @@ void Pipeline::Initialize(PipelineInfo info){
 void Pipeline::Bind(VkCommandBuffer command_buffer){
     vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_pipeline_);
 }
+void Pipeline::PushConstant(VkCommandBuffer vk_command_buffer,
+                            VkDeviceSize size, VkDeviceSize offset, void* data){
+    vkCmdPushConstants(vk_command_buffer, vk_pipeline_layout_, VK_SHADER_STAGE_VERTEX_BIT, 0, 64, data);
+}
 }

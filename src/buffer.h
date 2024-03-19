@@ -17,4 +17,9 @@ public:
     MemoryAllocation memory_allocation;
     VkBuffer vk_buffer;
 };
+
+class VertexBuffer{
+    
+};
+extern VertexBuffer* global_vertex_buffer;
 }

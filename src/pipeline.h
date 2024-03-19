@@ -43,7 +43,7 @@ private:
 struct VertexBinding{
     uint32_t binding;
     uint32_t stride;
-    bool per_instance = false;
+    VkVertexInputRate input_rate = VK_VERTEX_INPUT_RATE_VERTEX;
 };
 enum class AttributeFormat{
     Float,
@@ -67,12 +67,12 @@ enum class AttributeFormat{
 struct VertexAttribute{
     uint32_t location;
     uint32_t binding;
-    AttributeFormat format;
+    VkFormat format;
     uint32_t offset;
 };
 enum NGFX_FrontFace{
-    NGFX_FRONT_FACE_CCW= 0,
-    NGFX_FRONT_FACE_CW = 1,
+    NGFX_FRONT_FACE_CCW = 0,
+    NGFX_FRONT_FACE_CW  = 1,
 };
 enum NGFX_CullMode{
     NGFX_CULL_MODE_NONE = 0,
@@ -99,7 +99,8 @@ public:
     void Initialize(PipelineInfo info);
     
     void Bind(VkCommandBuffer command_buffer);
-        
+    void PushConstant(VkCommandBuffer vk_command_buffer, VkDeviceSize size, VkDeviceSize offset, void* data);
+    
 private:
     VkPipelineLayout vk_pipeline_layout_;
     VkPipeline vk_pipeline_;

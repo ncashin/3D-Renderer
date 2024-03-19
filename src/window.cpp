@@ -6,8 +6,11 @@ void Window::Init(){
 }
 
 
-Window::Window(const char* name, int width, int height, int x, int y){
-    window_ = SDL_CreateWindow(name, x, y, width, height, SDL_WINDOW_RESIZABLE | SDL_WINDOW_VULKAN);
+Window::Window(const char* name, int width, int height, int x, int y)
+    : width(width), height(height) {
+        SDL_SetRelativeMouseMode(SDL_TRUE);
+        window_ = SDL_CreateWindow(name, x, y, width, height,
+                                   SDL_WINDOW_RESIZABLE | SDL_WINDOW_VULKAN);
 }
 Window::~Window(){
     SDL_DestroyWindow(window_);

@@ -1,10 +1,10 @@
 #pragma once
 #include "render_context.h"
 
-namespace engine{
+namespace ngfx{
 class Swapchain{
 public:
-    Swapchain(std::unique_ptr<Window>& window);
+    Swapchain(Window* window);
     ~Swapchain();
     
     uint32_t AcquireImage(VkSemaphore semaphore, VkFence fence);

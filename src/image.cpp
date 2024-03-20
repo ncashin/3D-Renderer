@@ -1,6 +1,6 @@
 #include "image.h"
 
-namespace engine{
+namespace ngfx{
 Image::Image(ImageExtent extent) : extent_(extent) {
     VkImageCreateInfo image_create_info{};
     image_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
@@ -15,7 +15,7 @@ Image::Image(ImageExtent extent) : extent_(extent) {
     
     image_create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     image_create_info.queueFamilyIndexCount = 1;
-    image_create_info.pQueueFamilyIndices = &render_context->graphics_queue.vk_family_index;
+    image_create_info.pQueueFamilyIndices = &ngfx::Context::graphics_queue.vk_family_index;
     
     image_create_info.tiling = VK_IMAGE_TILING_OPTIMAL;
     image_create_info.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -24,13 +24,13 @@ Image::Image(ImageExtent extent) : extent_(extent) {
     image_create_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     image_create_info.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
     
-    vkCreateImage(render_context->vk_device, &image_create_info, nullptr, &image_);
+    vkCreateImage(ngfx::Context::vk_device, &image_create_info, nullptr, &image_);
 }
 Image::~Image(){
     if(view_ != VK_NULL_HANDLE){
-        vkDestroyImageView(render_context->vk_device, view_, nullptr);
+        vkDestroyImageView(ngfx::Context::vk_device, view_, nullptr);
     }
-    vkDestroyImage(render_context->vk_device, image_, nullptr);
+    vkDestroyImage(ngfx::Context::vk_device, image_, nullptr);
 }
 
 void Image::CreateImage(){
@@ -47,7 +47,7 @@ void Image::CreateImage(){
     
     image_create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     image_create_info.queueFamilyIndexCount = 1;
-    image_create_info.pQueueFamilyIndices = &render_context->graphics_queue.vk_family_index;
+    image_create_info.pQueueFamilyIndices = &ngfx::Context::graphics_queue.vk_family_index;
     
     image_create_info.tiling = VK_IMAGE_TILING_OPTIMAL;
     image_create_info.samples = VK_SAMPLE_COUNT_1_BIT;
@@ -56,7 +56,7 @@ void Image::CreateImage(){
     image_create_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     image_create_info.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
     
-    vkCreateImage(render_context->vk_device, &image_create_info, nullptr, &image_);
+    vkCreateImage(ngfx::Context::vk_device, &image_create_info, nullptr, &image_);
 }
 void Image::CreateView(){
     VkImageSubresourceRange subresource_range{};
@@ -77,13 +77,13 @@ void Image::CreateView(){
     view_create_info.subresourceRange.baseArrayLayer = 0;
     view_create_info.subresourceRange.layerCount = 1;
     
-    vkCreateImageView(render_context->vk_device, &view_create_info, nullptr, &view_);
+    vkCreateImageView(ngfx::Context::vk_device, &view_create_info, nullptr, &view_);
 }
 void Image::GetMemoryRequirements(VkMemoryRequirements* memory_requirements){
-    vkGetImageMemoryRequirements(render_context->vk_device, image_, memory_requirements);
+    vkGetImageMemoryRequirements(ngfx::Context::vk_device, image_, memory_requirements);
 }
 void Image::BindMemory(VkDeviceMemory vk_memory, VkDeviceSize offset){
-    vkBindImageMemory(render_context->vk_device, image_, vk_memory, offset);
+    vkBindImageMemory(ngfx::Context::vk_device, image_, vk_memory, offset);
 }
 
 void Image::WriteDescriptor(VkDescriptorSet descriptor_set, uint32_t binding, uint32_t index){
@@ -101,7 +101,7 @@ void Image::WriteDescriptor(VkDescriptorSet descriptor_set, uint32_t binding, ui
     set_write.dstSet = descriptor_set;
     set_write.pImageInfo = &image_info;
     
-    vkUpdateDescriptorSets(render_context->vk_device, 1, &set_write, 0, nullptr);
+    vkUpdateDescriptorSets(Context::vk_device, 1, &set_write, 0, nullptr);
 }
 
 // --- TEXTURE SET --- //

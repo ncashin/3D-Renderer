@@ -1,6 +1,6 @@
 #include "allocator.h"
 
-namespace engine{
+namespace ngfx{
 RegionList::RegionList(){};
 RegionList::RegionList(size_t offset, size_t size) : list_({{offset, size}}) {}
 bool RegionList::GetRegion(size_t size, size_t alignment, Region* acquired_region){
@@ -43,10 +43,11 @@ void RegionList::FreeRegion(Region free_memory){
 }
 
 
-Allocator* allocator = nullptr;
-Allocator::~Allocator(){
+std::vector<DeviceMemory> Allocator::device_allocations_{};
+void Allocator::Initialize(){};
+void Allocator::Terminate(){
     for(DeviceMemory memory : device_allocations_){
-        vkFreeMemory(render_context->vk_device, memory.vk_memory, nullptr);
+        vkFreeMemory(Context::vk_device, memory.vk_memory, nullptr);
     }
 }
 
@@ -68,7 +69,7 @@ MemoryAllocation Allocator::Malloc(NGFX_MemoryType desired_memory_type,
     }
     
     VkPhysicalDeviceMemoryProperties memory_properties{};
-    vkGetPhysicalDeviceMemoryProperties(render_context->vk_physical_device, &memory_properties);
+    vkGetPhysicalDeviceMemoryProperties(Context::vk_physical_device, &memory_properties);
     for(uint8_t i = 0; i < device_allocations_.size(); i++){
         DeviceMemory& memory = device_allocations_[i];
         if(!(memory_type_bits & (1 << memory.vk_memory_type_index)) ||
@@ -88,7 +89,7 @@ MemoryAllocation Allocator::Malloc(NGFX_MemoryType desired_memory_type,
             continue;
         }
         uint8_t heap_index = memory_properties.memoryTypes[i].heapIndex;
-        DeviceHeap& heap = render_context->device_heaps[heap_index];
+        DeviceHeap& heap = Context::device_heaps[heap_index];
         if(heap.allocated_size + size > heap.maximum_allocated_size){
             continue;
         }
@@ -108,9 +109,9 @@ MemoryAllocation Allocator::Malloc(NGFX_MemoryType desired_memory_type,
         DeviceMemory new_memory{};
         new_memory.region_list = { 0, new_allocation_size };
         new_memory.vk_memory_type_index = i;
-        vkAllocateMemory(render_context->vk_device, &allocate_info, nullptr, &new_memory.vk_memory);
+        vkAllocateMemory(Context::vk_device, &allocate_info, nullptr, &new_memory.vk_memory);
         if(desired_memory_type == NGFX_MemoryType::NGFX_MEMORY_TYPE_COHERENT){
-            vkMapMemory(render_context->vk_device,
+            vkMapMemory(Context::vk_device,
                         new_memory.vk_memory, 0, VK_WHOLE_SIZE, 0, (void**)&new_memory.mapped_pointer);
         }
         uint8_t new_memory_index = (uint8_t)device_allocations_.size();

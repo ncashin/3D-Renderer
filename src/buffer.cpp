@@ -1,6 +1,6 @@
 #include "buffer.h"
 
-namespace engine{
+namespace ngfx{
 Buffer::Buffer(size_t size){
     VkBufferCreateInfo create_info{};
     create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
@@ -14,19 +14,19 @@ Buffer::Buffer(size_t size){
     
     create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     create_info.queueFamilyIndexCount = 1;
-    create_info.pQueueFamilyIndices = &render_context->graphics_queue.vk_family_index;
+    create_info.pQueueFamilyIndices = &ngfx::Context::graphics_queue.vk_family_index;
     
-    vkCreateBuffer(render_context->vk_device, &create_info, nullptr, &vk_buffer);
+    vkCreateBuffer(ngfx::Context::vk_device, &create_info, nullptr, &vk_buffer);
 }
 Buffer::~Buffer(){
-    vkDestroyBuffer(render_context->vk_device, vk_buffer, nullptr);
+    vkDestroyBuffer(ngfx::Context::vk_device, vk_buffer, nullptr);
 }
 
 void Buffer::GetMemoryRequirements(VkMemoryRequirements* memory_requirements){
-    vkGetBufferMemoryRequirements(render_context->vk_device, vk_buffer, memory_requirements);
+    vkGetBufferMemoryRequirements(ngfx::Context::vk_device, vk_buffer, memory_requirements);
 }
 void Buffer::BindMemory(VkDeviceMemory vk_memory, VkDeviceSize offset){
-    vkBindBufferMemory(render_context->vk_device, vk_buffer, vk_memory, offset);
+    vkBindBufferMemory(ngfx::Context::vk_device, vk_buffer, vk_memory, offset);
 }
 
 void Buffer::BindAsVertexBuffer(VkCommandBuffer vk_command_buffer, VkDeviceSize offset){

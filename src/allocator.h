@@ -6,7 +6,7 @@
 #include "buffer.h"
 #include "image.h"
 
-namespace engine{
+namespace ngfx{
 struct Region{
     size_t offset;
     size_t size;
@@ -29,25 +29,24 @@ struct DeviceMemory{
     VkDeviceMemory vk_memory;
     char* mapped_pointer;
 };
-class Allocator{
-public:
-    ~Allocator();
-    
-    MemoryAllocation Malloc(NGFX_MemoryType desired_memory_type,
-                            VkMemoryRequirements memory_requirements);
-    MemoryAllocation Malloc(NGFX_MemoryType desired_memory_type,
-                            size_t size, size_t alignment, uint32_t memory_type_bits);
-    void Free(MemoryAllocation allocation);
-    
-    void Allocate(NGFX_MemoryType memory_type, Buffer* buffer);
-    void Allocate(NGFX_MemoryType memory_type, Image*  image);
+namespace Allocator{
+void Initialize();
+void Terminate();
 
-    void Free(Buffer* buffer);
-    void Free(Image*  image);
-    
-    void Map(Buffer* buffer, char** pointer);
-    
-    std::vector<DeviceMemory> device_allocations_;
-};
-extern Allocator* allocator;
+MemoryAllocation Malloc(NGFX_MemoryType desired_memory_type,
+                        VkMemoryRequirements memory_requirements);
+MemoryAllocation Malloc(NGFX_MemoryType desired_memory_type,
+                        size_t size, size_t alignment, uint32_t memory_type_bits);
+void Free(MemoryAllocation allocation);
+
+void Allocate(NGFX_MemoryType memory_type, Buffer* buffer);
+void Allocate(NGFX_MemoryType memory_type, Image*  image);
+
+void Free(Buffer* buffer);
+void Free(Image*  image);
+
+void Map(Buffer* buffer, char** pointer);
+
+extern std::vector<DeviceMemory> device_allocations_;
+}
 }

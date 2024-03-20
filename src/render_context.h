@@ -10,7 +10,7 @@
 
 #include "window.h"
 
-namespace engine{
+namespace ngfx{
 static VKAPI_ATTR VkBool32 VKAPI_CALL DefaultDebugCallback(
     VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
     VkDebugUtilsMessageTypeFlagsEXT        messageType,
@@ -29,30 +29,34 @@ struct DeviceQueue{
     VkQueue  vk_queue;
 };
 struct DeviceHeap{
-    DeviceHeap(VkDeviceSize minimum_allocation,
-               VkDeviceSize maximum_allocated_size);
+    //DeviceHeap(VkDeviceSize minimum_allocation,
+    //           VkDeviceSize maximum_allocated_size);
     
-    VkDeviceSize allocated_size;
-    const VkDeviceSize minimum_allocation;
-    const VkDeviceSize maximum_allocated_size;
+    VkDeviceSize allocated_size = 0;
+    const VkDeviceSize minimum_allocation = 0;
+    const VkDeviceSize maximum_allocated_size = 0;
 };
-class RenderContext{
-public:
-    RenderContext(std::unique_ptr<Window>& window, const bool enable_validation_layers,
-                  const char* applcation_name, const char* engine_name);
-    ~RenderContext();
-    
-    VkInstance vk_instance;
-    VkDebugUtilsMessengerEXT vk_debug_utils_messenger_;
-    
-    VkPhysicalDevice vk_physical_device;
-    VkDevice vk_device;
-    DeviceQueue graphics_queue;
-    DeviceQueue compute_queue;
-    DeviceQueue transfer_queue;
-    DeviceQueue present_queue;
-    
-    std::vector<DeviceHeap> device_heaps;
+struct ContextInfo{
+    Window* window;
+    bool enable_validation_layers;
+    const char* applcation_name; 
+    const char* engine_name;
 };
-extern RenderContext* render_context;
+namespace Context{
+void Initalize(Window* window, const bool enable_validation_layers,
+               const char* applcation_name, const char* engine_name);
+void Terminate();
+
+extern VkInstance vk_instance;
+extern VkDebugUtilsMessengerEXT vk_debug_utils_messenger;
+
+extern VkPhysicalDevice vk_physical_device;
+extern VkDevice vk_device;
+extern DeviceQueue graphics_queue;
+extern DeviceQueue compute_queue;
+extern DeviceQueue transfer_queue;
+extern DeviceQueue present_queue;
+
+extern std::vector<DeviceHeap> device_heaps;
+}
 }

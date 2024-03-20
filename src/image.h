@@ -2,7 +2,7 @@
 #include "render_context.h"
 #include "allocation.h"
 
-namespace engine{
+namespace ngfx{
 struct MemoryAllocation;
 struct ImageOffset{
     int32_t x;

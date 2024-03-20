@@ -1,14 +1,35 @@
 #include "render_manager.h"
 
-namespace engine{
-RenderManager::RenderManager(){
+namespace ngfx{
+
+namespace CommandManager{
+bool active = false;
+
+VkCommandPool primary_graphics_command_pool{};
+std::vector<VkCommandBuffer> primary_graphics_command_buffers{};
+std::condition_variable graphics_record_condition_variable{};
+std::thread graphics_record_thread{};
+std::deque<RecordingInfo> graphics_record_queue{};
+
+std::mutex  submission_mutex{};
+std::condition_variable submission_condition_variable{};
+std::thread submission_thread{};
+std::deque<SubmissionInfo> submission_queue{};
+
+std::mutex fence_mutex{};
+std::condition_variable fence_condition_variable{};
+}
+
+void CommandManager::Initialize(){
+    active = true;
+    
     VkCommandPoolCreateInfo pool_create_info{};
     pool_create_info.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
     pool_create_info.pNext = nullptr;
     pool_create_info.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
 
-    pool_create_info.queueFamilyIndex = render_context->graphics_queue.vk_family_index;
-    vkCreateCommandPool(render_context->vk_device, &pool_create_info, nullptr, &primary_graphics_command_pool);
+    pool_create_info.queueFamilyIndex = Context::graphics_queue.vk_family_index;
+    vkCreateCommandPool(Context::vk_device, &pool_create_info, nullptr, &primary_graphics_command_pool);
     
     primary_graphics_command_buffers.resize(1);
     VkCommandBufferAllocateInfo allocate_info{};
@@ -17,13 +38,13 @@ RenderManager::RenderManager(){
     allocate_info.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
     allocate_info.commandBufferCount = 1;
     allocate_info.commandPool = primary_graphics_command_pool;
-    vkAllocateCommandBuffers(render_context->vk_device, &allocate_info,
+    vkAllocateCommandBuffers(Context::vk_device, &allocate_info,
                              primary_graphics_command_buffers.data());
     
-    graphics_record_thread = std::thread(&RenderManager::HandleGraphicsRecording, this);
-    submission_thread      = std::thread(&RenderManager::HandleSubmission,        this);
+    graphics_record_thread = std::thread(&CommandManager::HandleGraphicsRecording);
+    submission_thread      = std::thread(&CommandManager::HandleSubmission);
 }
-RenderManager::~RenderManager(){
+void CommandManager::Terminate(){
     active = false;
     submission_mutex.lock();
     
@@ -44,11 +65,11 @@ RenderManager::~RenderManager(){
     
     delete vk_command_buffer;
     
-    vkDeviceWaitIdle(render_context->vk_device);
-    vkDestroyCommandPool(render_context->vk_device, primary_graphics_command_pool, nullptr);
+    vkDeviceWaitIdle(Context::vk_device);
+    vkDestroyCommandPool(Context::vk_device, primary_graphics_command_pool, nullptr);
 }
 
-void RenderManager::SubmitGraphics(SubmitInfo submit_info,
+void CommandManager::SubmitGraphics(SubmitInfo submit_info,
                                    std::function<void(VkCommandBuffer)> record_function){
     VkCommandBuffer* vk_command_buffer = new VkCommandBuffer(VK_NULL_HANDLE);
     submit_info.vk_command_buffer  = vk_command_buffer;
@@ -65,7 +86,7 @@ void RenderManager::SubmitGraphics(SubmitInfo submit_info,
     
     graphics_record_condition_variable.notify_one();
 }
-void RenderManager::SubmitCompute(SubmitInfo submit_info,
+void CommandManager::SubmitCompute(SubmitInfo submit_info,
                                   std::function<void(VkCommandBuffer)> record_function){
     VkCommandBuffer* vk_command_buffer = new VkCommandBuffer(VK_NULL_HANDLE);
     submit_info.vk_command_buffer  = vk_command_buffer;
@@ -80,7 +101,7 @@ void RenderManager::SubmitCompute(SubmitInfo submit_info,
     
     submission_mutex.unlock();
 }
-void RenderManager::Present(PresentInfo present_info){
+void CommandManager::Present(PresentInfo present_info){
     submission_mutex.lock();
     SubmissionInfo submission_info = { NGFX_SUBMISSION_TYPE_PRESENT, new PresentInfo(present_info) };
     submission_queue.emplace_back(submission_info);
@@ -88,31 +109,30 @@ void RenderManager::Present(PresentInfo present_info){
     submission_condition_variable.notify_one();
 }
 
-void RenderManager::InsertSubmissionFence(bool* fence){
+void CommandManager::InsertSubmissionFence(bool* fence){
     submission_mutex.lock();
     SubmissionInfo submission_info = { NGFX_SUBMISSION_TYPE_FENCE, fence };
     submission_queue.emplace_back(submission_info);
     submission_mutex.unlock();
     submission_condition_variable.notify_one();
 }
-void RenderManager::WaitForSubmissionFence(bool* submission_fence){
+void CommandManager::WaitForSubmissionFence(bool* submission_fence){
     std::unique_lock<std::mutex> lock(fence_mutex);
     fence_condition_variable.wait(lock, [submission_fence]{
         return *submission_fence;
     });
     *submission_fence = false;
 }
-void RenderManager::ResetSubmissionFence(bool& submission_fence){
+void CommandManager::ResetSubmissionFence(bool& submission_fence){
     fence_mutex.lock();
     submission_fence = false;
     fence_mutex.unlock();
 }
 
-void RenderManager::HandleGraphicsRecording(){
+void CommandManager::HandleGraphicsRecording(){
     while(active || graphics_record_queue.size() > 0){
-        
         std::unique_lock<std::mutex> lock(submission_mutex);
-        graphics_record_condition_variable.wait(lock, [this]{
+        graphics_record_condition_variable.wait(lock, []{
             return graphics_record_queue.size() != 0;
         });
         auto record_info = graphics_record_queue.front();
@@ -137,10 +157,10 @@ void RenderManager::HandleGraphicsRecording(){
         
     }
 }
-void RenderManager::HandleSubmission(){
+void CommandManager::HandleSubmission(){
     while(active || submission_queue.size() > 0){
         std::unique_lock<std::mutex> lock(submission_mutex);
-        submission_condition_variable.wait(lock, [this]{
+        submission_condition_variable.wait(lock, []{
             if(submission_queue.size() == 0) return false;
             if(submission_queue.front().type == NGFX_SUBMISSION_TYPE_GRAPHICS){
                 return *((SubmitInfo*)(submission_queue.front().pointer))->vk_command_buffer != VK_NULL_HANDLE;
@@ -172,7 +192,7 @@ void RenderManager::HandleSubmission(){
                 vk_submit_info.commandBufferCount = 1;
                 vk_submit_info.pCommandBuffers    = submit_info->vk_command_buffer;
                 
-                vkQueueSubmit(render_context->graphics_queue.vk_queue, 1, &vk_submit_info, submit_info->fence);
+                vkQueueSubmit(Context::graphics_queue.vk_queue, 1, &vk_submit_info, submit_info->fence);
                 delete submit_info->vk_command_buffer;
                 delete submit_info;
                 break;
@@ -190,7 +210,7 @@ void RenderManager::HandleSubmission(){
                 vk_submit_info.commandBufferCount = 1;
                 vk_submit_info.pCommandBuffers    = submit_info->vk_command_buffer;
                 
-                vkQueueSubmit(render_context->graphics_queue.vk_queue, 1, &vk_submit_info, submit_info->fence);
+                vkQueueSubmit(Context::graphics_queue.vk_queue, 1, &vk_submit_info, submit_info->fence);
                 delete submit_info->vk_command_buffer;
                 delete submit_info;
                 break;
@@ -203,7 +223,7 @@ void RenderManager::HandleSubmission(){
                 vk_present_info.pImageIndices  = present_info->image_indices.data();
                 vk_present_info.waitSemaphoreCount = (uint32_t)present_info->wait_semaphores.size();
                 vk_present_info.pWaitSemaphores    = present_info->wait_semaphores.data();
-                vkQueuePresentKHR(render_context->graphics_queue.vk_queue, &vk_present_info);
+                vkQueuePresentKHR(Context::graphics_queue.vk_queue, &vk_present_info);
                 delete present_info;
                 break;
                 

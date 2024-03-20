@@ -1,6 +1,6 @@
 #include "render_buffer.h"
 
-namespace engine{
+namespace ngfx{
 RenderBuffer::RenderBuffer(Swapchain* swapchain) : swapchain_attachment(swapchain) {
     VkAttachmentDescription swapchain_attachment_description{};
     swapchain_attachment_description.flags = 0;
@@ -45,7 +45,7 @@ RenderBuffer::RenderBuffer(Swapchain* swapchain) : swapchain_attachment(swapchai
     render_pass_create_info.dependencyCount = 1;
     render_pass_create_info.pDependencies   = &swapchain_present_dependency;
     
-    vkCreateRenderPass(render_context->vk_device, &render_pass_create_info, nullptr, &vk_render_pass);
+    vkCreateRenderPass(Context::vk_device, &render_pass_create_info, nullptr, &vk_render_pass);
     
     std::vector<VkImageView> attachment_views{};
     attachment_views.emplace_back(VkImageView{});
@@ -66,14 +66,14 @@ RenderBuffer::RenderBuffer(Swapchain* swapchain) : swapchain_attachment(swapchai
     VkImageView* swapchain_image_views = swapchain->GetImageViews();
     for(int i = 0; i < swapchain->images_.size(); i++){
         attachment_views[swapchain_index] = swapchain_image_views[i];
-        vkCreateFramebuffer(render_context->vk_device, &framebuffer_create_info, nullptr, &vk_framebuffers[i]);
+        vkCreateFramebuffer(Context::vk_device, &framebuffer_create_info, nullptr, &vk_framebuffers[i]);
     }
 }
 RenderBuffer::~RenderBuffer(){
     for(VkFramebuffer framebuffer : vk_framebuffers){
-        vkDestroyFramebuffer(render_context->vk_device, framebuffer, nullptr);
+        vkDestroyFramebuffer(Context::vk_device, framebuffer, nullptr);
     }
-    vkDestroyRenderPass(render_context->vk_device, vk_render_pass, nullptr);
+    vkDestroyRenderPass(Context::vk_device, vk_render_pass, nullptr);
 }
 
 void RenderBuffer::Begin(VkCommandBuffer vk_command_buffer, Swapchain* swapchain, uint32_t swapchain_image_index){

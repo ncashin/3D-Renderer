@@ -1,6 +1,6 @@
 #include "pipeline.h"
 
-namespace engine{
+namespace ngfx{
 VkShaderModule Shader::CompileGlsl(size_t buffer_size, char* buffer){
     return VK_NULL_HANDLE;
 }
@@ -13,7 +13,7 @@ VkShaderModule Shader::CompileSpirv(size_t buffer_size, char* buffer){
     create_info.pCode = (uint32_t*)buffer;
     
     VkShaderModule vk_shader_module;
-    VkResult vk_result = vkCreateShaderModule(render_context->vk_device, &create_info, nullptr, &vk_shader_module);
+    VkResult vk_result = vkCreateShaderModule(Context::vk_device, &create_info, nullptr, &vk_shader_module);
     if(vk_result != VK_SUCCESS){
         throw std::runtime_error("FAILED TO CREATE SHADER MODULE FROM SPIRV");
     }
@@ -50,7 +50,7 @@ Shader::Shader(ShaderInfo info)
     }
 }
 Shader::~Shader(){
-    vkDestroyShaderModule(render_context->vk_device, vk_shader_module_, nullptr);
+    vkDestroyShaderModule(Context::vk_device, vk_shader_module_, nullptr);
 }
 
 NGFX_ShaderStage Shader::GetStage(){
@@ -64,8 +64,8 @@ VkShaderModule Shader::GetModule(){
 Pipeline::Pipeline(){}
 Pipeline::Pipeline(PipelineInfo pipeline_info){ Initialize(pipeline_info); }
 Pipeline::~Pipeline(){
-    vkDestroyPipeline(render_context->vk_device, vk_pipeline_, nullptr);
-    vkDestroyPipelineLayout(render_context->vk_device, vk_pipeline_layout_, nullptr);
+    vkDestroyPipeline(Context::vk_device, vk_pipeline, nullptr);
+    vkDestroyPipelineLayout(Context::vk_device, vk_pipeline_layout, nullptr);
 }
 
 void Pipeline::Initialize(PipelineInfo info){
@@ -180,8 +180,8 @@ void Pipeline::Initialize(PipelineInfo info){
     layout_info.setLayoutCount = 0;
     layout_info.pSetLayouts = nullptr;
     
-    VkResult vk_result = vkCreatePipelineLayout(render_context->vk_device,
-                                                &layout_info, nullptr, &vk_pipeline_layout_);
+    VkResult vk_result = vkCreatePipelineLayout(Context::vk_device,
+                                                &layout_info, nullptr, &vk_pipeline_layout);
     if (vk_result != VK_SUCCESS) {
         throw std::runtime_error("failed to create pipeline layout!");
     }
@@ -200,7 +200,7 @@ void Pipeline::Initialize(PipelineInfo info){
     pipeline_info.pColorBlendState    = &blend_state;
     pipeline_info.pDynamicState       = &dynamic_state;
     
-    pipeline_info.layout = vk_pipeline_layout_;
+    pipeline_info.layout = vk_pipeline_layout;
     
     pipeline_info.renderPass = info.render_buffer->vk_render_pass;
     pipeline_info.subpass = 0;
@@ -209,17 +209,42 @@ void Pipeline::Initialize(PipelineInfo info){
     pipeline_info.basePipelineHandle = VK_NULL_HANDLE;
     pipeline_info.basePipelineIndex = -1;
     
-    vk_result = vkCreateGraphicsPipelines(render_context->vk_device, VK_NULL_HANDLE,
-                                          1, &pipeline_info, nullptr, &vk_pipeline_);
+    vk_result = vkCreateGraphicsPipelines(Context::vk_device, VK_NULL_HANDLE,
+                                          1, &pipeline_info, nullptr, &vk_pipeline);
     if (vk_result != VK_SUCCESS) {
         throw std::runtime_error("FAILED TO CREATE GRAPHICS PIPELINE");
     }
 }
 void Pipeline::Bind(VkCommandBuffer command_buffer){
-    vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_pipeline_);
+    vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_pipeline);
 }
 void Pipeline::PushConstant(VkCommandBuffer vk_command_buffer,
                             VkDeviceSize size, VkDeviceSize offset, void* data){
-    vkCmdPushConstants(vk_command_buffer, vk_pipeline_layout_, VK_SHADER_STAGE_VERTEX_BIT, 0, 64, data);
+    vkCmdPushConstants(vk_command_buffer, vk_pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, 64, data);
+}
+
+
+namespace PipelineManager{
+std::deque<ShaderCompilationInfo> shader_compilation_queue;
+std::deque<PipelineCompilationInfo> pipeline_compilation_queue;
+}
+
+Pipeline* PipelineManager::Compile(PipelineInfo info){
+    Pipeline* new_pipeline = new Pipeline{};
+    pipeline_compilation_queue.emplace_back(PipelineCompilationInfo{
+        new_pipeline,
+        info,
+    });
+    new_pipeline->Initialize(info);
+    return new_pipeline;
+}
+void PipelineManager::AwaitCompilation(Pipeline* pipeline){
+    
+}
+
+void PipelineManager::Destroy(Pipeline* pipeline){
+    // Implement removal of name from hashmap
+    // Implement layout refcount decrease
+    delete pipeline;
 }
 }

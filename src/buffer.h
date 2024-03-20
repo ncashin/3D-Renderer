@@ -2,7 +2,7 @@
 #include "render_context.h"
 #include "allocation.h"
 
-namespace engine{
+namespace ngfx{
 class Buffer{
 public:
     Buffer(size_t size);

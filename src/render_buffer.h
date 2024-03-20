@@ -2,7 +2,7 @@
 #include "render_context.h"
 #include "swapchain.h"
 
-namespace engine{
+namespace ngfx{
 class RenderBuffer{
 public:
     RenderBuffer(Swapchain* swapchain);

@@ -1,12 +1,13 @@
 #pragma once
 #include <fstream>
+#include <deque>
 
 #include "glm.hpp"
 
 #include "render_context.h"
 #include "render_buffer.h"
 
-namespace engine{
+namespace ngfx{
 enum NGFX_ShaderStage{
     NGFX_SHADER_STAGE_VERTEX   = 0x00000001,
     NGFX_SHADER_STAGE_FRAGMENT = 0x00000010,
@@ -101,9 +102,8 @@ public:
     void Bind(VkCommandBuffer command_buffer);
     void PushConstant(VkCommandBuffer vk_command_buffer, VkDeviceSize size, VkDeviceSize offset, void* data);
     
-private:
-    VkPipelineLayout vk_pipeline_layout_;
-    VkPipeline vk_pipeline_;
+    VkPipelineLayout vk_pipeline_layout;
+    VkPipeline vk_pipeline;
 };
 
 struct ShaderCompilationInfo{
@@ -115,4 +115,15 @@ struct PipelineCompilationInfo{
     PipelineInfo pipeline_info;
 };
 
+typedef uint32_t PipelineID;
+namespace PipelineManager{
+
+Pipeline* Compile(PipelineInfo info);
+void AwaitCompilation(Pipeline* pipeline);
+
+void Destroy(Pipeline* pipeline);
+
+extern std::deque<ShaderCompilationInfo> shader_compilation_queue;
+extern std::deque<PipelineCompilationInfo> pipeline_compilation_queue;
+}
 }

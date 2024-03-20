@@ -1,14 +1,14 @@
 #include "render_context.h"
 
-namespace engine{
+namespace ngfx{
 static VKAPI_ATTR VkBool32 VKAPI_CALL DefaultDebugCallback(
-    VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
-    VkDebugUtilsMessageTypeFlagsEXT        messageType,
-    const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
-    void* pUserData) {
-
+                                                           VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+                                                           VkDebugUtilsMessageTypeFlagsEXT        messageType,
+                                                           const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
+                                                           void* pUserData) {
+    
     printf("Vulkan Validation Layer -> %s\n", pCallbackData->pMessage);
-
+    
     return VK_FALSE;
 }
 uint32_t RatePhysicalDevice(VkPhysicalDevice vk_physical_device){
@@ -31,16 +31,28 @@ VulkanQueueIndices QueryQueueIndices(VkPhysicalDevice vk_physical_device){
     return queue_indices;
 }
 
-DeviceHeap::DeviceHeap(VkDeviceSize minimum_allocation, VkDeviceSize maximum_allocated_size)
-: minimum_allocation(minimum_allocation), maximum_allocated_size(maximum_allocated_size) {};
+/*DeviceHeap::DeviceHeap(VkDeviceSize minimum_allocation, VkDeviceSize maximum_allocated_size)
+: minimum_allocation(minimum_allocation), maximum_allocated_size(maximum_allocated_size) {};*/
 
-RenderContext* render_context = nullptr;
-RenderContext::RenderContext(std::unique_ptr<Window>& window, const bool enable_validation_layers,
-                             const char* applcation_name, const char* engine_name){
+namespace Context{
+VkInstance vk_instance;
+VkDebugUtilsMessengerEXT vk_debug_utils_messenger;
+
+VkPhysicalDevice vk_physical_device;
+VkDevice vk_device;
+DeviceQueue graphics_queue;
+DeviceQueue compute_queue;
+DeviceQueue transfer_queue;
+DeviceQueue present_queue;
+
+std::vector<DeviceHeap> device_heaps;
+
+void Initalize(Window* window, const bool enable_validation_layers,
+                    const char* applcation_name, const char* engine_name){
     std::vector<const char*> extension_names;
     extension_names.emplace_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
     extension_names.emplace_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
-
+    
     unsigned int window_extension_count = 0;
     window->GetInstanceExtensions(&window_extension_count, nullptr);
     const char** window_extension_names = new const char*[window_extension_count];
@@ -67,7 +79,7 @@ RenderContext::RenderContext(std::unique_ptr<Window>& window, const bool enable_
     application_info.pEngineName   = engine_name;
     application_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
     application_info.apiVersion = VK_API_VERSION_1_0;
-
+    
     
     auto unsupported_extensions = vkutil::ValidateInstanceExtensionSupport(extension_names);
     if(unsupported_extensions.size() != 0){
@@ -99,14 +111,14 @@ RenderContext::RenderContext(std::unique_ptr<Window>& window, const bool enable_
         debug_messenger_create_info.pNext = nullptr;
         debug_messenger_create_info.flags = 0;
         
-        debug_messenger_create_info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT | 
+        debug_messenger_create_info.messageSeverity = VK_DEBUG_UTILS_MESSAGE_SEVERITY_VERBOSE_BIT_EXT |
         VK_DEBUG_UTILS_MESSAGE_SEVERITY_WARNING_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_SEVERITY_ERROR_BIT_EXT;
-        debug_messenger_create_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT | 
+        debug_messenger_create_info.messageType = VK_DEBUG_UTILS_MESSAGE_TYPE_GENERAL_BIT_EXT |
         VK_DEBUG_UTILS_MESSAGE_TYPE_VALIDATION_BIT_EXT | VK_DEBUG_UTILS_MESSAGE_TYPE_PERFORMANCE_BIT_EXT;
         debug_messenger_create_info.pfnUserCallback = &DefaultDebugCallback;
         debug_messenger_create_info.pUserData = nullptr;
-
-        vkutil::CreateDebugUtilsMessengerEXT(vk_instance, &debug_messenger_create_info, nullptr, &vk_debug_utils_messenger_);
+        
+        vkutil::CreateDebugUtilsMessengerEXT(vk_instance, &debug_messenger_create_info, nullptr, &vk_debug_utils_messenger);
     }
     
     
@@ -148,7 +160,7 @@ RenderContext::RenderContext(std::unique_ptr<Window>& window, const bool enable_
         }
         
         VkPhysicalDeviceFeatures device_features{};
-
+        
         VkDeviceCreateInfo device_create_info{};
         device_create_info.sType = VK_STRUCTURE_TYPE_DEVICE_CREATE_INFO;
         device_create_info.pNext = nullptr;
@@ -178,15 +190,17 @@ RenderContext::RenderContext(std::unique_ptr<Window>& window, const bool enable_
     vkGetPhysicalDeviceMemoryProperties(vk_physical_device, &memory_properties);
     for(uint8_t i = 0; i < memory_properties.memoryHeapCount; i++){
         device_heaps.emplace_back(DeviceHeap{
+            0,
             static_cast<VkDeviceSize>(memory_properties.memoryHeaps[i].size * 0.16),
             static_cast<VkDeviceSize>(memory_properties.memoryHeaps[i].size * 0.80),
         });
     }
 }
-RenderContext::~RenderContext(){
+void Terminate(){
     vkDestroyDevice(vk_device, nullptr);
     
-    vkutil::DestroyDebugUtilsMessengerEXT(vk_instance, vk_debug_utils_messenger_, nullptr);
+    vkutil::DestroyDebugUtilsMessengerEXT(vk_instance, vk_debug_utils_messenger, nullptr);
     vkDestroyInstance(vk_instance, nullptr);
+}
 }
 }

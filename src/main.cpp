@@ -13,8 +13,6 @@
 
 #include "render_manager.h"
 
-using namespace engine;
-
 #include <glm/glm.hpp>
 #ifndef GLM_ENABLE_EXPERIMENTAL
 #define GLM_ENABLE_EXPERIMENTAL
@@ -24,6 +22,9 @@ using namespace engine;
 #include "input.h"
 
 #include "asset.h"
+
+using namespace engine;
+using namespace ngfx;
 
 struct Vertex {
     glm::vec3 position;
@@ -133,8 +134,8 @@ void UpdateCamera(){
 }
 
 void SyntaxTest(){
-    ngfx::Context::vk_device;
-    ngfx::Manager::Submit(submit_info,
+    /*
+    ngfx::RenderManager::Submit(submit_info,
                           [data, render_buffer, swapchain, image_index, pipeline,
                           buffer, vertex_count, index_count]
                           (VkCommandBuffer vk_command_buffer)
@@ -162,24 +163,32 @@ void SyntaxTest(){
         vkCmdDrawIndexed(vk_command_buffer, index_count, 1, 0, 0, 0);
         
         vkCmdEndRenderPass(vk_command_buffer);
-    });
+    });*/
 }
 
 int main(int argc, char** argv){
     SDL_Init(SDL_INIT_EVERYTHING);
     SDL_DisplayMode display_mode;
     SDL_GetCurrentDisplayMode(0, &display_mode);
-    auto window = std::make_unique<Window>("engine", display_mode.w, display_mode.h);
+    auto window = new Window("engine", display_mode.w, display_mode.h);
     
-    render_context = new RenderContext(window, true, "engine", "engine");
-    allocator      = new Allocator();
-    auto render_manager = new RenderManager();
+    ContextInfo context_info{};
+    context_info.window = window;
+    context_info.enable_validation_layers = true;
+    context_info.applcation_name = "engine";
+    context_info.engine_name = "engine";
+    ngfx::Context::Initalize(window, true, "engine", "engine");
+    
+    ngfx::Allocator::Initialize();
+    
+    ngfx::CommandManager::Initialize();
+        
     auto swapchain      = new Swapchain(window);
     auto render_buffer  = new RenderBuffer(swapchain);
-
+    
     Shader* vertex_shader   = new Shader({NGFX_SHADER_STAGE_VERTEX,   NGFX_SHADER_FORMAT_SPIRV, "vert.spv"});
     Shader* fragment_shader = new Shader({NGFX_SHADER_STAGE_FRAGMENT, NGFX_SHADER_FORMAT_SPIRV, "frag.spv"});
-        
+    
     
     PipelineInfo pipeline_info{};
     pipeline_info.render_buffer = render_buffer;
@@ -191,7 +200,8 @@ int main(int argc, char** argv){
     pipeline_info.shaders = { vertex_shader, fragment_shader };
     pipeline_info.front_face = NGFX_FRONT_FACE_CCW;
     pipeline_info.cull_mode  = NGFX_CULL_MODE_BACK_FACE;
-    Pipeline* pipeline = new Pipeline(pipeline_info);
+    Pipeline* pipeline = ngfx::PipelineManager::Compile(pipeline_info);
+    
     delete vertex_shader;
     delete fragment_shader;
     
@@ -200,34 +210,36 @@ int main(int argc, char** argv){
     });
     
     Buffer* buffer = new Buffer(100000000);
-    allocator->Allocate(NGFX_MEMORY_TYPE_COHERENT, buffer);
+    Allocator::Allocate(NGFX_MEMORY_TYPE_COHERENT, buffer);
     char* mapped_pointer;
-    allocator->Map(buffer, &mapped_pointer);
+    Allocator::Map(buffer, &mapped_pointer);
     uint32_t vertex_count = 0;
     uint32_t index_count  = 0;
     Asset::LoadMesh(mapped_pointer, &vertex_count, &index_count, "backpack/backpack.obj");
     //std::memcpy(mapped_pointer, vertices.data(), vertices.size() * sizeof(Vertex));
-
+    
     Image* image = new Image({100, 100, 1});
-    allocator->Allocate(NGFX_MEMORY_TYPE_DEVICE_LOCAL, image);
+    Allocator::Allocate(NGFX_MEMORY_TYPE_DEVICE_LOCAL, image);
     
     VkSemaphoreCreateInfo semaphore_create_info{};
     semaphore_create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
     semaphore_create_info.pNext = nullptr;
     semaphore_create_info.flags = 0;
     VkSemaphore swapchain_semaphore;
-    vkCreateSemaphore(render_context->vk_device, &semaphore_create_info, nullptr, &swapchain_semaphore);
+    vkCreateSemaphore(Context::vk_device, &semaphore_create_info, nullptr, &swapchain_semaphore);
     
     VkSemaphore render_finished_semaphore;
-    vkCreateSemaphore(render_context->vk_device, &semaphore_create_info, nullptr, &render_finished_semaphore);
+    vkCreateSemaphore(Context::vk_device, &semaphore_create_info, nullptr, &render_finished_semaphore);
     
     VkFenceCreateInfo fence_create_info{};
     fence_create_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
     fence_create_info.pNext = nullptr;
     fence_create_info.flags = VK_FENCE_CREATE_SIGNALED_BIT;
     VkFence render_complete_fence;
-    vkCreateFence(render_context->vk_device, &fence_create_info, nullptr, &render_complete_fence);
-        
+    vkCreateFence(Context::vk_device, &fence_create_info, nullptr, &render_complete_fence);
+    
+    ngfx::PipelineManager::AwaitCompilation(pipeline);
+    
     bool submission_fence = true;
     while(running){
         Input::Flush();
@@ -238,10 +250,10 @@ int main(int argc, char** argv){
             running = false;
         }
         
-        render_manager->WaitForSubmissionFence(&submission_fence);
-
-        vkWaitForFences(render_context->vk_device, 1, &render_complete_fence, VK_TRUE, UINT64_MAX);
-        vkResetFences(render_context->vk_device, 1, &render_complete_fence);
+        ngfx::CommandManager::WaitForSubmissionFence(&submission_fence);
+        
+        vkWaitForFences(Context::vk_device, 1, &render_complete_fence, VK_TRUE, UINT64_MAX);
+        vkResetFences(Context::vk_device, 1, &render_complete_fence);
         
         uint32_t image_index = swapchain->AcquireImage(swapchain_semaphore, VK_NULL_HANDLE);
         
@@ -253,66 +265,71 @@ int main(int argc, char** argv){
         
         float aspect_ratio = (float)window->width / (float)window->height;
         void* data = new glm::mat4(camera.GetViewProjection(aspect_ratio));
-
-        render_manager->SubmitGraphics(submit_info,
-                                       [data, render_buffer, swapchain, image_index, pipeline, 
-                                        buffer, vertex_count, index_count]
-                                       (VkCommandBuffer vk_command_buffer){
-            render_buffer->Begin(vk_command_buffer, swapchain, image_index);
-            pipeline->Bind(vk_command_buffer);
-            
-            buffer->BindAsVertexBuffer(vk_command_buffer, 0);
-            buffer->BindAsIndexBuffer (vk_command_buffer, vertex_count * sizeof(Vertex));
-            
-            pipeline->PushConstant(vk_command_buffer, 0, sizeof(glm::mat4), data);
-            delete (glm::mat4*)data;
-            
-            VkViewport viewport{};
-            viewport.width  = swapchain->extent_.width;
-            viewport.height = swapchain->extent_.height;
-            viewport.x = 0;
-            viewport.y = 0;
-            vkCmdSetViewport(vk_command_buffer, 0, 1, &viewport);
-            
-            VkRect2D scissor{};
-            scissor.offset = {0, 0};
-            scissor.extent = swapchain->extent_;
-            vkCmdSetScissor(vk_command_buffer, 0, 1, &scissor);
-            
-            //vkCmdDraw(vk_command_buffer, vertex_count, 1, 0, 0);
-            vkCmdDrawIndexed(vk_command_buffer, index_count, 1, 0, 0, 0);
-            
-            vkCmdEndRenderPass(vk_command_buffer);
-        });
         
-        render_manager->InsertSubmissionFence(&submission_fence);
+         ngfx::CommandManager::SubmitGraphics(submit_info,
+                                              [data, render_buffer, swapchain, image_index, pipeline,
+                                               buffer, vertex_count, index_count]
+                                              (VkCommandBuffer vk_command_buffer){
+             render_buffer->Begin(vk_command_buffer, swapchain, image_index);
+             pipeline->Bind(vk_command_buffer);
+             
+             buffer->BindAsVertexBuffer(vk_command_buffer, 0);
+             buffer->BindAsIndexBuffer (vk_command_buffer, vertex_count * sizeof(Vertex));
+             
+             pipeline->PushConstant(vk_command_buffer, 0, sizeof(glm::mat4), data);
+             delete (glm::mat4*)data; 
+             
+             VkViewport viewport{};
+             viewport.width  = swapchain->extent_.width;
+             viewport.height = swapchain->extent_.height;
+             viewport.x = 0;
+             viewport.y = 0;
+             vkCmdSetViewport(vk_command_buffer, 0, 1, &viewport);
+             
+             VkRect2D scissor{};
+             scissor.offset = {0, 0};
+             scissor.extent = swapchain->extent_;
+             vkCmdSetScissor(vk_command_buffer, 0, 1, &scissor);
+             
+             //vkCmdDraw(vk_command_buffer, vertex_count, 1, 0, 0);
+             vkCmdDrawIndexed(vk_command_buffer, index_count, 1, 0, 0, 0);
+             
+             vkCmdEndRenderPass(vk_command_buffer);
+         });
+        
+        ngfx::CommandManager::InsertSubmissionFence(&submission_fence);
         
         PresentInfo present_info{};
         present_info.wait_semaphores = {render_finished_semaphore};
         present_info.swapchains      = {swapchain->vk_swapchain_};
         present_info.image_indices   = {image_index};
         
-        render_manager->Present(present_info);
+        ngfx::CommandManager::Present(present_info);
     }
-        
-    render_manager->WaitForSubmissionFence(&submission_fence);
-    vkWaitForFences(render_context->vk_device, 1, &render_complete_fence, VK_TRUE, UINT64_MAX);
-    vkResetFences(render_context->vk_device, 1, &render_complete_fence);
-    delete render_manager;
     
-    allocator->Free(buffer);
+    ngfx::CommandManager::WaitForSubmissionFence(&submission_fence);
+    vkWaitForFences(Context::vk_device, 1, &render_complete_fence, VK_TRUE, UINT64_MAX);
+    vkResetFences(Context::vk_device, 1, &render_complete_fence);
+    
+    ngfx::CommandManager::Terminate();
+    
+    Allocator::Free(buffer);
     delete buffer;
     
-    allocator->Free(image);
+    Allocator::Free(image);
     delete image;
     
-    vkDestroySemaphore(render_context->vk_device, swapchain_semaphore, nullptr);
-    vkDestroySemaphore(render_context->vk_device, render_finished_semaphore, nullptr);
-    vkDestroyFence(render_context->vk_device, render_complete_fence, nullptr);
+    vkDestroySemaphore(Context::vk_device, swapchain_semaphore, nullptr);
+    vkDestroySemaphore(Context::vk_device, render_finished_semaphore, nullptr);
+    vkDestroyFence(Context::vk_device, render_complete_fence, nullptr);
     
-    delete pipeline;
+
+    ngfx::PipelineManager::Destroy(pipeline);
     delete render_buffer;
+    
     delete swapchain;
-    delete allocator;
-    delete render_context;
+    delete window;
+    
+    Allocator::Terminate();
+    Context  ::Terminate();
 }

@@ -1,7 +1,7 @@
 #pragma once
 #include "render_context.h"
 
-namespace engine{
+namespace ngfx{
 struct DescriptorBinding{
     uint32_t              binding;
     VkDescriptorType      descriptorType;

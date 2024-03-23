@@ -89,7 +89,7 @@ MemoryAllocation Allocator::Malloc(NGFX_MemoryType desired_memory_type,
             continue;
         }
         uint8_t heap_index = memory_properties.memoryTypes[i].heapIndex;
-        DeviceHeap& heap = Context::device_heaps[heap_index];
+        //DeviceHeap& heap = Context::device_heaps[heap_index];
         if(heap.allocated_size + size > heap.maximum_allocated_size){
             continue;
         }
@@ -126,14 +126,14 @@ void Allocator::Free(MemoryAllocation allocation){
     });
 }
 
-void Allocator::Allocate(NGFX_MemoryType memory_type, Buffer* buffer){
+void Allocator::BindMemory(NGFX_MemoryType memory_type, Buffer* buffer){
     VkMemoryRequirements memory_requirements;
     buffer->GetMemoryRequirements(&memory_requirements);
     auto allocation = Malloc(memory_type, memory_requirements);
-    buffer->memory_allocation = allocation;
+    //buffer->memory_allocation = allocation;
     buffer->BindMemory(device_allocations_[allocation.resource_index].vk_memory, allocation.offset);
 }
-void Allocator::Allocate(NGFX_MemoryType memory_type, Image* image){
+void Allocator::BindMemory(NGFX_MemoryType memory_type, Image* image){
     VkMemoryRequirements memory_requirements;
     image->GetMemoryRequirements(&memory_requirements);
     auto allocation = Malloc(memory_type, memory_requirements);
@@ -143,14 +143,14 @@ void Allocator::Allocate(NGFX_MemoryType memory_type, Image* image){
 }
 
 void Allocator::Free(Buffer* buffer){
-    Free(buffer->memory_allocation);
+    //Free(buffer->memory_allocation);
 }
 void Allocator::Free(Image*  image){
     Free(image->memory_allocation);
 }
 
 void Allocator::Map(Buffer* buffer, char** pointer){
-    auto index = buffer->memory_allocation.resource_index;
-    *pointer = device_allocations_[index].mapped_pointer + buffer->memory_allocation.offset;
+    //auto index = buffer->memory_allocation.resource_index;
+    //*pointer = device_allocations_[index].mapped_pointer + buffer->memory_allocation.offset;
 }
 }

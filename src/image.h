@@ -1,6 +1,5 @@
 #pragma once
 #include "render_context.h"
-#include "allocation.h"
 
 namespace ngfx{
 struct MemoryAllocation;
@@ -18,10 +17,17 @@ struct ImageRegion{
     ImageOffset offset;
     ImageExtent extent;
 };
+struct ImageInfo{
+    ImageExtent extent;
+};
 class Image {
 public:
-    Image(ImageExtent extent);
+    Image();
+    Image(ImageInfo info);
     ~Image();
+    
+    void Initialize(ImageInfo info);
+    void Terminate();
     
     void WriteDescriptor(VkDescriptorSet descriptor_set, uint32_t binding, uint32_t index);
 
@@ -32,8 +38,8 @@ public:
     void GetMemoryRequirements(VkMemoryRequirements* memory_requirements);
     void BindMemory(VkDeviceMemory vk_memory, VkDeviceSize offset);
     
-    const ImageExtent extent_;
-    MemoryAllocation memory_allocation;
+    ImageExtent extent_;
+    VmaAllocation vma_allocation;
     VkImage image_;
     VkImageView view_;
 };

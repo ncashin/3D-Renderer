@@ -1,11 +1,18 @@
 #pragma once
 #include <fstream>
+
 #include <deque>
+#include <functional>
+#include <mutex>
+#include <thread>
 
 #include "glm.hpp"
 
 #include "render_context.h"
 #include "render_buffer.h"
+
+#include "thread_pool.h"
+
 
 namespace ngfx{
 enum NGFX_ShaderStage{
@@ -117,13 +124,16 @@ struct PipelineCompilationInfo{
 
 typedef uint32_t PipelineID;
 namespace PipelineManager{
+void Initialize();
+void Terminate();
 
 Pipeline* Compile(PipelineInfo info);
 void AwaitCompilation(Pipeline* pipeline);
 
 void Destroy(Pipeline* pipeline);
 
-extern std::deque<ShaderCompilationInfo> shader_compilation_queue;
-extern std::deque<PipelineCompilationInfo> pipeline_compilation_queue;
+
+extern std::mutex compilation_mutex;
+extern std::condition_variable compilation_condition_variable;
 }
 }

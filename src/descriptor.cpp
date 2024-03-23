@@ -6,7 +6,6 @@ VkDescriptorSetLayout CreateDescriptorSetLayout(std::vector<DescriptorBinding> b
     create_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
     create_info.pNext = nullptr;
     create_info.flags = 0;
-    printf("%lu\n", bindings.size());
     create_info.bindingCount = (uint32_t)bindings.size();
     create_info.pBindings    = (VkDescriptorSetLayoutBinding*)bindings.data();
     

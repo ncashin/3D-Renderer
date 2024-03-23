@@ -3,7 +3,6 @@
 #include "swapchain.h"
 
 #include "render_context.h"
-#include "allocator.h"
 
 #include "descriptor.h"
 
@@ -12,6 +11,9 @@
 #include "pipeline.h"
 
 #include "render_manager.h"
+
+#include "buffer.h"
+#include "image.h"
 
 #include <glm/glm.hpp>
 #ifndef GLM_ENABLE_EXPERIMENTAL
@@ -22,6 +24,10 @@
 #include "input.h"
 
 #include "asset.h"
+
+#include "thread_pool.h"
+
+#include "staging.h"
 
 using namespace engine;
 using namespace ngfx;
@@ -166,7 +172,14 @@ void SyntaxTest(){
     });*/
 }
 
+void RunLoop(){
+    
+}
+
 int main(int argc, char** argv){
+    const uint32_t thread_count = 1;
+    ThreadPool::Initialize(thread_count);
+    
     SDL_Init(SDL_INIT_EVERYTHING);
     SDL_DisplayMode display_mode;
     SDL_GetCurrentDisplayMode(0, &display_mode);
@@ -178,11 +191,13 @@ int main(int argc, char** argv){
     context_info.applcation_name = "engine";
     context_info.engine_name = "engine";
     ngfx::Context::Initalize(window, true, "engine", "engine");
-    
-    ngfx::Allocator::Initialize();
-    
+            
     ngfx::CommandManager::Initialize();
         
+    ngfx::PipelineManager::Initialize();
+    
+    ngfx::StagingManager::Initialize();
+    
     auto swapchain      = new Swapchain(window);
     auto render_buffer  = new RenderBuffer(swapchain);
     
@@ -202,24 +217,28 @@ int main(int argc, char** argv){
     pipeline_info.cull_mode  = NGFX_CULL_MODE_BACK_FACE;
     Pipeline* pipeline = ngfx::PipelineManager::Compile(pipeline_info);
     
-    delete vertex_shader;
-    delete fragment_shader;
-    
-    auto set_layout = CreateDescriptorSetLayout({
+    /*auto set_layout = CreateDescriptorSetLayout({
         {0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 16, NGFX_SHADER_STAGE_FRAGMENT, nullptr},
+    });*/
+    
+    Buffer buffer{};
+    buffer.Initialize({
+        100000000,
+        VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
+        VK_BUFFER_USAGE_INDEX_BUFFER_BIT  |
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT,
+        VMA_MEMORY_USAGE_GPU_ONLY, 0
     });
     
-    Buffer* buffer = new Buffer(100000000);
-    Allocator::Allocate(NGFX_MEMORY_TYPE_COHERENT, buffer);
-    char* mapped_pointer;
-    Allocator::Map(buffer, &mapped_pointer);
     uint32_t vertex_count = 0;
     uint32_t index_count  = 0;
-    Asset::LoadMesh(mapped_pointer, &vertex_count, &index_count, "backpack/backpack.obj");
-    //std::memcpy(mapped_pointer, vertices.data(), vertices.size() * sizeof(Vertex));
+    char* staging_pointer = StagingManager::UploadToBuffer(sizeof(glm::vec3) * 300000, 0, &buffer);
+    Asset::LoadMesh(staging_pointer, &vertex_count, &index_count, "backpack/backpack.obj");
     
-    Image* image = new Image({100, 100, 1});
-    Allocator::Allocate(NGFX_MEMORY_TYPE_DEVICE_LOCAL, image);
+    StagingManager::SubmitUpload({});
+    
+    Image image{};
+    image.Initialize({100, 100, 1});
     
     VkSemaphoreCreateInfo semaphore_create_info{};
     semaphore_create_info.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
@@ -239,6 +258,10 @@ int main(int argc, char** argv){
     vkCreateFence(Context::vk_device, &fence_create_info, nullptr, &render_complete_fence);
     
     ngfx::PipelineManager::AwaitCompilation(pipeline);
+    delete vertex_shader;
+    delete fragment_shader;
+    
+    StagingManager::AwaitUploadCompletion();
     
     bool submission_fence = true;
     while(running){
@@ -266,15 +289,16 @@ int main(int argc, char** argv){
         float aspect_ratio = (float)window->width / (float)window->height;
         void* data = new glm::mat4(camera.GetViewProjection(aspect_ratio));
         
-         ngfx::CommandManager::SubmitGraphics(submit_info,
+        Buffer* buffer_pointer = &buffer;
+         ngfx::CommandManager::SubmitGraphics(submit_info, &submission_fence,
                                               [data, render_buffer, swapchain, image_index, pipeline,
-                                               buffer, vertex_count, index_count]
+                                               buffer_pointer, vertex_count, index_count]
                                               (VkCommandBuffer vk_command_buffer){
              render_buffer->Begin(vk_command_buffer, swapchain, image_index);
              pipeline->Bind(vk_command_buffer);
              
-             buffer->BindAsVertexBuffer(vk_command_buffer, 0);
-             buffer->BindAsIndexBuffer (vk_command_buffer, vertex_count * sizeof(Vertex));
+             buffer_pointer->BindAsVertexBuffer(vk_command_buffer, 0);
+             buffer_pointer->BindAsIndexBuffer (vk_command_buffer, vertex_count * sizeof(Vertex));
              
              pipeline->PushConstant(vk_command_buffer, 0, sizeof(glm::mat4), data);
              delete (glm::mat4*)data; 
@@ -297,7 +321,6 @@ int main(int argc, char** argv){
              vkCmdEndRenderPass(vk_command_buffer);
          });
         
-        ngfx::CommandManager::InsertSubmissionFence(&submission_fence);
         
         PresentInfo present_info{};
         present_info.wait_semaphores = {render_finished_semaphore};
@@ -313,23 +336,22 @@ int main(int argc, char** argv){
     
     ngfx::CommandManager::Terminate();
     
-    Allocator::Free(buffer);
-    delete buffer;
+    StagingManager::Terminate();
     
-    Allocator::Free(image);
-    delete image;
+    buffer.Terminate();
+    image.Terminate();
     
     vkDestroySemaphore(Context::vk_device, swapchain_semaphore, nullptr);
     vkDestroySemaphore(Context::vk_device, render_finished_semaphore, nullptr);
     vkDestroyFence(Context::vk_device, render_complete_fence, nullptr);
     
-
     ngfx::PipelineManager::Destroy(pipeline);
+    PipelineManager::Terminate();
     delete render_buffer;
     
     delete swapchain;
     delete window;
     
-    Allocator::Terminate();
-    Context  ::Terminate();
+    ThreadPool::Terminate();
+    Context::Terminate();
 }

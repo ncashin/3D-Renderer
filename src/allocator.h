@@ -39,8 +39,8 @@ MemoryAllocation Malloc(NGFX_MemoryType desired_memory_type,
                         size_t size, size_t alignment, uint32_t memory_type_bits);
 void Free(MemoryAllocation allocation);
 
-void Allocate(NGFX_MemoryType memory_type, Buffer* buffer);
-void Allocate(NGFX_MemoryType memory_type, Image*  image);
+void BindMemory(NGFX_MemoryType memory_type, Buffer* buffer);
+void BindMemory(NGFX_MemoryType memory_type, Image*  image);
 
 void Free(Buffer* buffer);
 void Free(Image*  image);

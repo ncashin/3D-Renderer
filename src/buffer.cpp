@@ -1,32 +1,41 @@
 #include "buffer.h"
 
 namespace ngfx{
-Buffer::Buffer(size_t size){
+Buffer::Buffer(){};
+Buffer::Buffer(BufferInfo buffer_info){
+    Initialize(buffer_info);
+}
+Buffer::~Buffer(){
+    if(vk_buffer != VK_NULL_HANDLE){
+        Terminate();
+    }
+}
+
+char* Buffer::Initialize(BufferInfo buffer_info){
     VkBufferCreateInfo create_info{};
     create_info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     create_info.flags = 0;
     create_info.pNext = nullptr;
     
-    create_info.size = size;
-    create_info.usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
-                        VK_BUFFER_USAGE_TRANSFER_SRC_BIT   | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-    VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT;
+    create_info.size = buffer_info.size;
+    create_info.usage = buffer_info.usage_flags;
     
     create_info.sharingMode = VK_SHARING_MODE_EXCLUSIVE;
     create_info.queueFamilyIndexCount = 1;
     create_info.pQueueFamilyIndices = &ngfx::Context::graphics_queue.vk_family_index;
     
-    vkCreateBuffer(ngfx::Context::vk_device, &create_info, nullptr, &vk_buffer);
+    VmaAllocationCreateInfo alloc_create_info = {};
+    alloc_create_info.usage = buffer_info.memory_usage;
+    alloc_create_info.flags = buffer_info.create_flags;
+    VmaAllocationInfo alloc_info{};
+    vmaCreateBuffer(Context::allocator, &create_info, &alloc_create_info,
+                    &vk_buffer, &vma_allocation, &alloc_info);
+    
+    return (char*)alloc_info.pMappedData;
 }
-Buffer::~Buffer(){
-    vkDestroyBuffer(ngfx::Context::vk_device, vk_buffer, nullptr);
-}
-
-void Buffer::GetMemoryRequirements(VkMemoryRequirements* memory_requirements){
-    vkGetBufferMemoryRequirements(ngfx::Context::vk_device, vk_buffer, memory_requirements);
-}
-void Buffer::BindMemory(VkDeviceMemory vk_memory, VkDeviceSize offset){
-    vkBindBufferMemory(ngfx::Context::vk_device, vk_buffer, vk_memory, offset);
+void Buffer::Terminate(){
+    vmaDestroyBuffer(Context::allocator, vk_buffer, vma_allocation);
+    vk_buffer = VK_NULL_HANDLE;
 }
 
 void Buffer::BindAsVertexBuffer(VkCommandBuffer vk_command_buffer, VkDeviceSize offset){

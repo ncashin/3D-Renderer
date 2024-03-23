@@ -1,7 +1,16 @@
 #include "image.h"
 
 namespace ngfx{
-Image::Image(ImageExtent extent) : extent_(extent) {
+Image::Image(){};
+Image::Image(ImageInfo info){
+    Initialize(info);
+}
+Image::~Image(){
+    Terminate();
+}
+
+void Image::Initialize(ImageInfo info){
+    extent_ = info.extent;
     VkImageCreateInfo image_create_info{};
     image_create_info.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     image_create_info.flags = 0;
@@ -24,13 +33,19 @@ Image::Image(ImageExtent extent) : extent_(extent) {
     image_create_info.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     image_create_info.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
     
-    vkCreateImage(ngfx::Context::vk_device, &image_create_info, nullptr, &image_);
+    VmaAllocationCreateInfo allocInfo = {};
+    allocInfo.usage = VMA_MEMORY_USAGE_AUTO;
+    vmaCreateImage(Context::allocator, &image_create_info, &allocInfo, &image_, &vma_allocation, nullptr);
 }
-Image::~Image(){
+void Image::Terminate(){
     if(view_ != VK_NULL_HANDLE){
         vkDestroyImageView(ngfx::Context::vk_device, view_, nullptr);
+        view_ = VK_NULL_HANDLE;
     }
-    vkDestroyImage(ngfx::Context::vk_device, image_, nullptr);
+    if(image_ != VK_NULL_HANDLE){
+        vmaDestroyImage(Context::allocator, image_, vma_allocation);
+        image_ = VK_NULL_HANDLE;
+    }
 }
 
 void Image::CreateImage(){

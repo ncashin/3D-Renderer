@@ -32,6 +32,5 @@ void Asset::LoadMesh(char* destination, uint32_t* vertex_count, uint32_t* index_
             }
         }
     }
-    printf("%u, %u\n", *vertex_count, *index_count);
 }
 }

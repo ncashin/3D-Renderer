@@ -3,7 +3,7 @@ set(CMAKE_CXX_STANDARD 14)
 project(engine)
 
 # --- Source Files --- #
-set(ENGINE_SOURCE_FILES src/main.cpp src/asset.h src/asset.cpp src/input.h src/input.cpp)
+set(ENGINE_SOURCE_FILES src/main.cpp src/thread_pool.h src/thread_pool.cpp src/asset.h src/asset.cpp src/input.h src/input.cpp)
 
 set(NGFX_SOURCE_FILES 
 src/window.h src/window.cpp 
@@ -17,7 +17,8 @@ src/descriptor.h src/descriptor.cpp
 src/swapchain.h src/swapchain.cpp
 src/render_buffer.h src/render_buffer.cpp
 src/pipeline.h src/pipeline.cpp
-src/render_manager.h src/render_manager.cpp)
+src/render_manager.h src/render_manager.cpp
+src/staging.h src/staging.cpp)
 
 add_executable(runtime ${ENGINE_SOURCE_FILES} ${NGFX_SOURCE_FILES})
 
@@ -44,4 +45,7 @@ set(ASSIMP_BUILD_STATIC_LIB ON)
 add_subdirectory(vendor/assimp)
 include_directories(vendor/assimp/include)
 target_link_libraries(runtime PRIVATE assimp)
+
+add_subdirectory(vendor/VulkanMemoryAllocator)
+target_link_libraries(runtime PRIVATE VulkanMemoryAllocator)
 

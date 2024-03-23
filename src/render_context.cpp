@@ -1,5 +1,10 @@
 #include "render_context.h"
 
+#ifndef VMA_IMPLEMENTATION
+#define VMA_IMPLEMENTATION
+#endif
+#include "vk_mem_alloc.h"
+
 namespace ngfx{
 static VKAPI_ATTR VkBool32 VKAPI_CALL DefaultDebugCallback(
                                                            VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
@@ -45,7 +50,7 @@ DeviceQueue compute_queue;
 DeviceQueue transfer_queue;
 DeviceQueue present_queue;
 
-std::vector<DeviceHeap> device_heaps;
+VmaAllocator allocator;
 
 void Initalize(Window* window, const bool enable_validation_layers,
                     const char* applcation_name, const char* engine_name){
@@ -186,17 +191,23 @@ void Initalize(Window* window, const bool enable_validation_layers,
     graphics_queue.vk_family_index = queue_indices.graphics_family_index;
     vkGetDeviceQueue(vk_device, graphics_queue.vk_family_index, 0, &graphics_queue.vk_queue);
     
-    VkPhysicalDeviceMemoryProperties memory_properties{};
-    vkGetPhysicalDeviceMemoryProperties(vk_physical_device, &memory_properties);
-    for(uint8_t i = 0; i < memory_properties.memoryHeapCount; i++){
-        device_heaps.emplace_back(DeviceHeap{
-            0,
-            static_cast<VkDeviceSize>(memory_properties.memoryHeaps[i].size * 0.16),
-            static_cast<VkDeviceSize>(memory_properties.memoryHeaps[i].size * 0.80),
-        });
-    }
+    
+    VmaVulkanFunctions vulkanFunctions = {};
+    vulkanFunctions.vkGetInstanceProcAddr = &vkGetInstanceProcAddr;
+    vulkanFunctions.vkGetDeviceProcAddr = &vkGetDeviceProcAddr;
+    
+    VmaAllocatorCreateInfo allocator_create_info = {};
+    allocator_create_info.flags = VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT;
+    allocator_create_info.vulkanApiVersion = VK_API_VERSION_1_0;
+    allocator_create_info.physicalDevice = vk_physical_device;
+    allocator_create_info.device = vk_device;
+    allocator_create_info.instance = vk_instance;
+    allocator_create_info.pVulkanFunctions = &vulkanFunctions;
+    vmaCreateAllocator(&allocator_create_info, &allocator);
 }
 void Terminate(){
+    vmaDestroyAllocator(allocator);
+    
     vkDestroyDevice(vk_device, nullptr);
     
     vkutil::DestroyDebugUtilsMessengerEXT(vk_instance, vk_debug_utils_messenger, nullptr);

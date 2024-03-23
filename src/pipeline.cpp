@@ -209,8 +209,11 @@ void Pipeline::Initialize(PipelineInfo info){
     pipeline_info.basePipelineHandle = VK_NULL_HANDLE;
     pipeline_info.basePipelineIndex = -1;
     
+    PipelineManager::compilation_mutex.lock();
     vk_result = vkCreateGraphicsPipelines(Context::vk_device, VK_NULL_HANDLE,
                                           1, &pipeline_info, nullptr, &vk_pipeline);
+    PipelineManager::compilation_mutex.unlock();
+
     if (vk_result != VK_SUCCESS) {
         throw std::runtime_error("FAILED TO CREATE GRAPHICS PIPELINE");
     }
@@ -225,21 +228,31 @@ void Pipeline::PushConstant(VkCommandBuffer vk_command_buffer,
 
 
 namespace PipelineManager{
-std::deque<ShaderCompilationInfo> shader_compilation_queue;
-std::deque<PipelineCompilationInfo> pipeline_compilation_queue;
+std::mutex compilation_mutex;
+std::condition_variable compilation_condition_variable;
+}
+
+void PipelineManager::Initialize(){
+}
+void PipelineManager::Terminate(){
 }
 
 Pipeline* PipelineManager::Compile(PipelineInfo info){
     Pipeline* new_pipeline = new Pipeline{};
-    pipeline_compilation_queue.emplace_back(PipelineCompilationInfo{
-        new_pipeline,
-        info,
+    
+    ThreadPool::Dispatch([new_pipeline, info]{
+        new_pipeline->Initialize(info);
+        compilation_condition_variable.notify_all();
+        return ThreadPool::ReturnState::COMPLETE;
     });
-    new_pipeline->Initialize(info);
+    
     return new_pipeline;
 }
 void PipelineManager::AwaitCompilation(Pipeline* pipeline){
-    
+    std::unique_lock<std::mutex> lock(compilation_mutex);
+    compilation_condition_variable.wait(lock, [pipeline]{
+        return pipeline->vk_pipeline != VK_NULL_HANDLE;
+    });
 }
 
 void PipelineManager::Destroy(Pipeline* pipeline){

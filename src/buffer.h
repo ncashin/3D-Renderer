@@ -1,21 +1,27 @@
 #pragma once
 #include "render_context.h"
-#include "allocation.h"
 
 namespace ngfx{
+struct BufferInfo{
+    size_t size;
+    VkBufferUsageFlags usage_flags;
+    VmaMemoryUsage memory_usage;
+    VmaAllocationCreateFlags create_flags;
+};
 class Buffer{
 public:
-    Buffer(size_t size);
+    Buffer();
+    Buffer(BufferInfo buffer_info);
     ~Buffer();
     
-    void GetMemoryRequirements(VkMemoryRequirements* memory_requirements);
-    void BindMemory(VkDeviceMemory vk_memory, VkDeviceSize offset);
+    char* Initialize(BufferInfo buffer_info);
+    void  Terminate();
     
     void BindAsVertexBuffer(VkCommandBuffer vk_command_buffer, VkDeviceSize offset);
     void BindAsIndexBuffer (VkCommandBuffer vk_command_buffer, VkDeviceSize offset);
-
-    MemoryAllocation memory_allocation;
-    VkBuffer vk_buffer;
+    
+    VmaAllocation vma_allocation;
+    VkBuffer vk_buffer = VK_NULL_HANDLE;
 };
 
 class VertexBuffer{

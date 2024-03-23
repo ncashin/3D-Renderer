@@ -8,6 +8,8 @@
 #include "vulkan/vulkan.h"
 #include "vkutil.h"
 
+#include "vk_mem_alloc.h"
+
 #include "window.h"
 
 namespace ngfx{
@@ -57,6 +59,6 @@ extern DeviceQueue compute_queue;
 extern DeviceQueue transfer_queue;
 extern DeviceQueue present_queue;
 
-extern std::vector<DeviceHeap> device_heaps;
+extern VmaAllocator allocator;
 }
 }

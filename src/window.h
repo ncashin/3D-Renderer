@@ -2,7 +2,7 @@
 #include "SDL2/SDL.h"
 #include "SDL2/SDL_vulkan.h"
 
-namespace ngfx{
+namespace render{
 class Window{
 public:
     static void Init();

@@ -60,12 +60,8 @@ void ThreadPool::HandleDispatch(){
             }
             case ReturnState::REDISPATCH:{
                 lock.lock();
-                
                 dispatch_queue.emplace_back(function);
-                
                 lock.unlock();
-                
-                //dispatch_condition_variable.notify_one();
                 break;
             }
         }

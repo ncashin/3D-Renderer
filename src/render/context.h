@@ -12,7 +12,7 @@
 
 #include "window.h"
 
-namespace ngfx{
+namespace render{
 static VKAPI_ATTR VkBool32 VKAPI_CALL DefaultDebugCallback(
     VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
     VkDebugUtilsMessageTypeFlagsEXT        messageType,
@@ -44,21 +44,22 @@ struct ContextInfo{
     const char* applcation_name; 
     const char* engine_name;
 };
-namespace Context{
-void Initalize(Window* window, const bool enable_validation_layers,
-               const char* applcation_name, const char* engine_name);
-void Terminate();
-
-extern VkInstance vk_instance;
-extern VkDebugUtilsMessengerEXT vk_debug_utils_messenger;
-
-extern VkPhysicalDevice vk_physical_device;
-extern VkDevice vk_device;
-extern DeviceQueue graphics_queue;
-extern DeviceQueue compute_queue;
-extern DeviceQueue transfer_queue;
-extern DeviceQueue present_queue;
-
-extern VmaAllocator allocator;
-}
+class Context{
+public:
+    void Initalize(ContextInfo info);
+    void Terminate();
+    
+    VkInstance vk_instance;
+    VkDebugUtilsMessengerEXT vk_debug_utils_messenger;
+    
+    VkPhysicalDevice vk_physical_device;
+    VkDevice vk_device;
+    DeviceQueue graphics_queue;
+    DeviceQueue compute_queue;
+    DeviceQueue transfer_queue;
+    DeviceQueue present_queue;
+    
+    VmaAllocator allocator;
+};
+extern Context context;
 }

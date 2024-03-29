@@ -1,7 +1,9 @@
 #pragma once
-#include "render_context.h"
+#include "render/context.h"
 
-namespace ngfx{
+#include <mutex>
+
+namespace render{
 class Swapchain{
 public:
     Swapchain(Window* window);
@@ -11,6 +13,8 @@ public:
     
     void CreateImageViews();
     VkImageView* GetImageViews();
+    
+    std::mutex usage_mutex;
     
     VkSurfaceKHR vk_surface_;
     VkSurfaceFormatKHR surface_format_;

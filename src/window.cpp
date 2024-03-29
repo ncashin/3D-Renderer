@@ -1,6 +1,6 @@
 #include "window.h"
 
-namespace ngfx{
+namespace render{
 void Window::Init(){
     SDL_Init(SDL_INIT_EVERYTHING);
 }

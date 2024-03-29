@@ -1,17 +1,15 @@
-#include "render_context.h"
+#include "render/context.h"
 
 #ifndef VMA_IMPLEMENTATION
 #define VMA_IMPLEMENTATION
 #endif
 #include "vk_mem_alloc.h"
 
-namespace ngfx{
-static VKAPI_ATTR VkBool32 VKAPI_CALL DefaultDebugCallback(
-                                                           VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
+namespace render{
+static VKAPI_ATTR VkBool32 VKAPI_CALL DefaultDebugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT messageSeverity,
                                                            VkDebugUtilsMessageTypeFlagsEXT        messageType,
                                                            const VkDebugUtilsMessengerCallbackDataEXT* pCallbackData,
                                                            void* pUserData) {
-    
     printf("Vulkan Validation Layer -> %s\n", pCallbackData->pMessage);
     
     return VK_FALSE;
@@ -36,42 +34,26 @@ VulkanQueueIndices QueryQueueIndices(VkPhysicalDevice vk_physical_device){
     return queue_indices;
 }
 
-/*DeviceHeap::DeviceHeap(VkDeviceSize minimum_allocation, VkDeviceSize maximum_allocated_size)
-: minimum_allocation(minimum_allocation), maximum_allocated_size(maximum_allocated_size) {};*/
 
-namespace Context{
-VkInstance vk_instance;
-VkDebugUtilsMessengerEXT vk_debug_utils_messenger;
-
-VkPhysicalDevice vk_physical_device;
-VkDevice vk_device;
-DeviceQueue graphics_queue;
-DeviceQueue compute_queue;
-DeviceQueue transfer_queue;
-DeviceQueue present_queue;
-
-VmaAllocator allocator;
-
-void Initalize(Window* window, const bool enable_validation_layers,
-                    const char* applcation_name, const char* engine_name){
+void Context::Initalize(ContextInfo info){
     std::vector<const char*> extension_names;
     extension_names.emplace_back(VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME);
     extension_names.emplace_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
     
     unsigned int window_extension_count = 0;
-    window->GetInstanceExtensions(&window_extension_count, nullptr);
+    info.window->GetInstanceExtensions(&window_extension_count, nullptr);
     const char** window_extension_names = new const char*[window_extension_count];
-    window->GetInstanceExtensions(&window_extension_count, window_extension_names);
+    info.window->GetInstanceExtensions(&window_extension_count, window_extension_names);
     for(unsigned int i = 0; i < window_extension_count; i++){
         extension_names.emplace_back(window_extension_names[i]);
     }
     delete[] window_extension_names;
-    if(enable_validation_layers){
+    if(info.enable_validation_layers){
         extension_names.emplace_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
     }
     
     std::vector<const char*> layer_names;
-    if(enable_validation_layers){
+    if(info.enable_validation_layers){
         layer_names.emplace_back("VK_LAYER_KHRONOS_validation");
     }
     
@@ -79,11 +61,11 @@ void Initalize(Window* window, const bool enable_validation_layers,
     application_info.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
     application_info.pNext = nullptr;
     
-    application_info.pApplicationName   = applcation_name;
+    application_info.pApplicationName   = info.applcation_name;
     application_info.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-    application_info.pEngineName   = engine_name;
-    application_info.engineVersion = VK_MAKE_VERSION(1, 0, 0);
-    application_info.apiVersion = VK_API_VERSION_1_0;
+    application_info.pEngineName   = info.engine_name;
+    application_info.engineVersion = VK_MAKE_VERSION(1, 2, 0);
+    application_info.apiVersion = VK_API_VERSION_1_2;
     
     
     auto unsupported_extensions = vkutil::ValidateInstanceExtensionSupport(extension_names);
@@ -110,7 +92,7 @@ void Initalize(Window* window, const bool enable_validation_layers,
         throw std::runtime_error("FAILED TO CREATE VULKAN INSTANCE!");
     }
     
-    if(enable_validation_layers){
+    if(info.enable_validation_layers){
         VkDebugUtilsMessengerCreateInfoEXT debug_messenger_create_info{};
         debug_messenger_create_info.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
         debug_messenger_create_info.pNext = nullptr;
@@ -192,20 +174,20 @@ void Initalize(Window* window, const bool enable_validation_layers,
     vkGetDeviceQueue(vk_device, graphics_queue.vk_family_index, 0, &graphics_queue.vk_queue);
     
     
-    VmaVulkanFunctions vulkanFunctions = {};
-    vulkanFunctions.vkGetInstanceProcAddr = &vkGetInstanceProcAddr;
-    vulkanFunctions.vkGetDeviceProcAddr = &vkGetDeviceProcAddr;
+    VmaVulkanFunctions vma_vulkan_functions = {};
+    vma_vulkan_functions.vkGetInstanceProcAddr = &vkGetInstanceProcAddr;
+    vma_vulkan_functions.vkGetDeviceProcAddr = &vkGetDeviceProcAddr;
     
     VmaAllocatorCreateInfo allocator_create_info = {};
     allocator_create_info.flags = VMA_ALLOCATOR_CREATE_EXT_MEMORY_BUDGET_BIT;
-    allocator_create_info.vulkanApiVersion = VK_API_VERSION_1_0;
+    allocator_create_info.vulkanApiVersion = VK_API_VERSION_1_2;
     allocator_create_info.physicalDevice = vk_physical_device;
     allocator_create_info.device = vk_device;
     allocator_create_info.instance = vk_instance;
-    allocator_create_info.pVulkanFunctions = &vulkanFunctions;
+    allocator_create_info.pVulkanFunctions = &vma_vulkan_functions;
     vmaCreateAllocator(&allocator_create_info, &allocator);
 }
-void Terminate(){
+void Context::Terminate(){
     vmaDestroyAllocator(allocator);
     
     vkDestroyDevice(vk_device, nullptr);
@@ -213,5 +195,5 @@ void Terminate(){
     vkutil::DestroyDebugUtilsMessengerEXT(vk_instance, vk_debug_utils_messenger, nullptr);
     vkDestroyInstance(vk_instance, nullptr);
 }
-}
+Context context;
 }

@@ -1,14 +1,14 @@
 #include "swapchain.h"
 
-namespace ngfx{
+namespace render{
 Swapchain::Swapchain(Window* window){
-    vk_surface_ = window->CreateVulkanSurface(Context::vk_instance);
+    vk_surface_ = window->CreateVulkanSurface(render::context.vk_instance);
     
     uint32_t available_format_count;
-    vkGetPhysicalDeviceSurfaceFormatsKHR(Context::vk_physical_device, vk_surface_,
+    vkGetPhysicalDeviceSurfaceFormatsKHR(render::context.vk_physical_device, vk_surface_,
                                          &available_format_count, nullptr);
     VkSurfaceFormatKHR* available_surface_formats = new VkSurfaceFormatKHR[available_format_count];
-    vkGetPhysicalDeviceSurfaceFormatsKHR(Context::vk_physical_device, vk_surface_,
+    vkGetPhysicalDeviceSurfaceFormatsKHR(render::context.vk_physical_device, vk_surface_,
                                          &available_format_count, available_surface_formats);
     VkSurfaceFormatKHR chosen_surface_format = available_surface_formats[0];
     for (int i = 0; i < available_format_count; i++) {
@@ -21,10 +21,10 @@ Swapchain::Swapchain(Window* window){
     delete[] available_surface_formats;
     
     uint32_t available_present_mode_count;
-    vkGetPhysicalDeviceSurfacePresentModesKHR(Context::vk_physical_device, vk_surface_,
+    vkGetPhysicalDeviceSurfacePresentModesKHR(render::context.vk_physical_device, vk_surface_,
                                               &available_present_mode_count, nullptr);
     VkPresentModeKHR* available_present_modes = new VkPresentModeKHR[available_present_mode_count];
-    vkGetPhysicalDeviceSurfacePresentModesKHR(Context::vk_physical_device, vk_surface_,
+    vkGetPhysicalDeviceSurfacePresentModesKHR(render::context.vk_physical_device, vk_surface_,
                                               &available_present_mode_count, available_present_modes);
     
     VkPresentModeKHR chosen_present_mode = VK_PRESENT_MODE_FIFO_KHR;
@@ -37,7 +37,7 @@ Swapchain::Swapchain(Window* window){
     delete[] available_present_modes;
     
     VkSurfaceCapabilitiesKHR surface_capabilities;
-    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(Context::vk_physical_device, vk_surface_,
+    vkGetPhysicalDeviceSurfaceCapabilitiesKHR(render::context.vk_physical_device, vk_surface_,
                                               &surface_capabilities);
     extent_ = surface_capabilities.currentExtent;
     
@@ -60,10 +60,10 @@ Swapchain::Swapchain(Window* window){
     create_info.imageArrayLayers = 1;
     create_info.imageUsage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT;
     
-    if (Context::graphics_queue.vk_family_index != Context::present_queue.vk_family_index){
+    if (render::context.graphics_queue.vk_family_index != render::context.present_queue.vk_family_index){
         uint32_t family_indices[] = {
-            Context::graphics_queue.vk_family_index,
-            Context::present_queue.vk_family_index
+            render::context.graphics_queue.vk_family_index,
+            render::context.present_queue.vk_family_index
         };
         create_info.imageSharingMode = VK_SHARING_MODE_CONCURRENT;
         create_info.queueFamilyIndexCount = 2;
@@ -79,25 +79,28 @@ Swapchain::Swapchain(Window* window){
     create_info.clipped = VK_TRUE;
     create_info.oldSwapchain = VK_NULL_HANDLE;
     
-    VkResult vk_result = vkCreateSwapchainKHR(Context::vk_device, &create_info, nullptr, &vk_swapchain_);
+    VkResult vk_result = vkCreateSwapchainKHR(render::context.vk_device, &create_info, nullptr, &vk_swapchain_);
     
-    vkGetSwapchainImagesKHR(Context::vk_device, vk_swapchain_, &image_count, nullptr);
+    vkGetSwapchainImagesKHR(render::context.vk_device, vk_swapchain_, &image_count, nullptr);
     images_.resize(image_count);
-    vkGetSwapchainImagesKHR(Context::vk_device, vk_swapchain_, &image_count, images_.data());
+    vkGetSwapchainImagesKHR(render::context.vk_device, vk_swapchain_, &image_count, images_.data());
     
     surface_format_ = chosen_surface_format;
 }
 Swapchain::~Swapchain(){
     for(VkImageView image_view : image_views){
-        vkDestroyImageView(Context::vk_device, image_view, nullptr);
+        vkDestroyImageView(render::context.vk_device, image_view, nullptr);
     }
-    vkDestroySwapchainKHR(Context::vk_device, vk_swapchain_, nullptr);
-    vkDestroySurfaceKHR(Context::vk_instance, vk_surface_, nullptr);
+    vkDestroySwapchainKHR(render::context.vk_device, vk_swapchain_, nullptr);
+    vkDestroySurfaceKHR(render::context.vk_instance, vk_surface_, nullptr);
 }
 
 uint32_t Swapchain::AcquireImage(VkSemaphore semaphore, VkFence fence){
+    usage_mutex.lock();
     uint32_t image_index;
-    vkAcquireNextImageKHR(Context::vk_device, vk_swapchain_, UINT64_MAX, semaphore, fence, &image_index);
+    vkAcquireNextImageKHR(render::context.vk_device, vk_swapchain_, UINT64_MAX,
+                          semaphore, fence, &image_index);
+    usage_mutex.unlock();
     return   image_index;
 }
 
@@ -120,7 +123,7 @@ void Swapchain::CreateImageViews(){
     image_views.resize(images_.size());
     for(int i = 0; i < image_views.size(); i++){
         image_view_create_info.image = images_[i];
-        vkCreateImageView(Context::vk_device, &image_view_create_info, nullptr, &image_views[i]);
+        vkCreateImageView(render::context.vk_device, &image_view_create_info, nullptr, &image_views[i]);
     }
 }
 VkImageView* Swapchain::GetImageViews(){

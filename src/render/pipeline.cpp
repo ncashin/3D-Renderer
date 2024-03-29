@@ -1,6 +1,6 @@
 #include "pipeline.h"
 
-namespace ngfx{
+namespace render{
 VkShaderModule Shader::CompileGlsl(size_t buffer_size, char* buffer){
     return VK_NULL_HANDLE;
 }
@@ -13,7 +13,7 @@ VkShaderModule Shader::CompileSpirv(size_t buffer_size, char* buffer){
     create_info.pCode = (uint32_t*)buffer;
     
     VkShaderModule vk_shader_module;
-    VkResult vk_result = vkCreateShaderModule(Context::vk_device, &create_info, nullptr, &vk_shader_module);
+    VkResult vk_result = vkCreateShaderModule(render::context.vk_device, &create_info, nullptr, &vk_shader_module);
     if(vk_result != VK_SUCCESS){
         throw std::runtime_error("FAILED TO CREATE SHADER MODULE FROM SPIRV");
     }
@@ -21,12 +21,12 @@ VkShaderModule Shader::CompileSpirv(size_t buffer_size, char* buffer){
 }
 
 // --- Member Functions --- //
-Shader::Shader(NGFX_ShaderStage shader_stage, NGFX_ShaderFormat shader_code_format, size_t buffer_size, char* buffer)
+Shader::Shader(ShaderStage shader_stage, ShaderFormat shader_code_format, size_t buffer_size, char* buffer)
 : shader_stage_(shader_stage) {
     switch(shader_code_format){
-        case NGFX_SHADER_FORMAT_GLSL:
+        case SHADER_FORMAT_GLSL:
             break;
-        case NGFX_SHADER_FORMAT_SPIRV:
+        case SHADER_FORMAT_SPIRV:
             vk_shader_module_ = CompileSpirv(buffer_size, buffer);
             break;
     }
@@ -42,18 +42,18 @@ Shader::Shader(ShaderInfo info)
     file.read(buffer, size);
     
     switch(info.shader_code_format){
-        case NGFX_SHADER_FORMAT_GLSL:
+        case SHADER_FORMAT_GLSL:
             break;
-        case NGFX_SHADER_FORMAT_SPIRV:
+        case SHADER_FORMAT_SPIRV:
             vk_shader_module_ = CompileSpirv(size, buffer);
             break;
     }
 }
 Shader::~Shader(){
-    vkDestroyShaderModule(Context::vk_device, vk_shader_module_, nullptr);
+    vkDestroyShaderModule(render::context.vk_device, vk_shader_module_, nullptr);
 }
 
-NGFX_ShaderStage Shader::GetStage(){
+ShaderStage Shader::GetStage(){
     return shader_stage_;
 }
 VkShaderModule Shader::GetModule(){
@@ -62,11 +62,7 @@ VkShaderModule Shader::GetModule(){
 
 // --- Pipeline --- //
 Pipeline::Pipeline(){}
-Pipeline::Pipeline(PipelineInfo pipeline_info){ Initialize(pipeline_info); }
-Pipeline::~Pipeline(){
-    vkDestroyPipeline(Context::vk_device, vk_pipeline, nullptr);
-    vkDestroyPipelineLayout(Context::vk_device, vk_pipeline_layout, nullptr);
-}
+Pipeline::~Pipeline(){}
 
 void Pipeline::Initialize(PipelineInfo info){
     std::vector<VkPipelineShaderStageCreateInfo> vk_shader_stage_info{};
@@ -144,9 +140,9 @@ void Pipeline::Initialize(PipelineInfo info){
     VkPipelineDepthStencilStateCreateInfo depth_stencil{};
     depth_stencil.sType = VK_STRUCTURE_TYPE_PIPELINE_DEPTH_STENCIL_STATE_CREATE_INFO;
     depth_stencil.flags = 0;
-    depth_stencil.depthTestEnable = VK_FALSE;
-    depth_stencil.depthWriteEnable = VK_FALSE;
-    depth_stencil.depthCompareOp = VK_COMPARE_OP_LESS;
+    depth_stencil.depthTestEnable  = info.depth_test_enabled;
+    depth_stencil.depthWriteEnable = info.depth_write_enabled;
+    depth_stencil.depthCompareOp   = VK_COMPARE_OP_LESS;
     
     depth_stencil.depthBoundsTestEnable = VK_FALSE;
     depth_stencil.minDepthBounds = 0.0f;
@@ -168,20 +164,17 @@ void Pipeline::Initialize(PipelineInfo info){
     blend_state.blendConstants[3] = 0.0f;
     
     /* Pipeline Layout */
-    VkPushConstantRange camera_push_constant;
-    camera_push_constant.stageFlags = VK_SHADER_STAGE_VERTEX_BIT;
-    camera_push_constant.size = sizeof(glm::mat4);
-    camera_push_constant.offset = 0;
     
     VkPipelineLayoutCreateInfo layout_info{};
     layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    layout_info.pushConstantRangeCount = 1;
-    layout_info.pPushConstantRanges = &camera_push_constant;
-    layout_info.setLayoutCount = 0;
-    layout_info.pSetLayouts = nullptr;
+    layout_info.pushConstantRangeCount = (uint32_t)info.push_constant_ranges.size();
+    layout_info.pPushConstantRanges    = (VkPushConstantRange*)info.push_constant_ranges.data();
+    layout_info.setLayoutCount = (uint32_t)info.descriptor_set_layouts.size();
+    layout_info.pSetLayouts    = (VkDescriptorSetLayout*)info.descriptor_set_layouts.data();
     
-    VkResult vk_result = vkCreatePipelineLayout(Context::vk_device,
-                                                &layout_info, nullptr, &vk_pipeline_layout);
+    VkPipelineLayout pipeline_layout;
+    VkResult vk_result = vkCreatePipelineLayout(render::context.vk_device,
+                                                &layout_info, nullptr, &pipeline_layout);
     if (vk_result != VK_SUCCESS) {
         throw std::runtime_error("failed to create pipeline layout!");
     }
@@ -200,7 +193,7 @@ void Pipeline::Initialize(PipelineInfo info){
     pipeline_info.pColorBlendState    = &blend_state;
     pipeline_info.pDynamicState       = &dynamic_state;
     
-    pipeline_info.layout = vk_pipeline_layout;
+    pipeline_info.layout = pipeline_layout;
     
     pipeline_info.renderPass = info.render_buffer->vk_render_pass;
     pipeline_info.subpass = 0;
@@ -209,15 +202,24 @@ void Pipeline::Initialize(PipelineInfo info){
     pipeline_info.basePipelineHandle = VK_NULL_HANDLE;
     pipeline_info.basePipelineIndex = -1;
     
-    PipelineManager::compilation_mutex.lock();
-    vk_result = vkCreateGraphicsPipelines(Context::vk_device, VK_NULL_HANDLE,
-                                          1, &pipeline_info, nullptr, &vk_pipeline);
-    PipelineManager::compilation_mutex.unlock();
+    VkPipeline pipeline;
+    vk_result = vkCreateGraphicsPipelines(render::context.vk_device, VK_NULL_HANDLE,
+                                          1, &pipeline_info, nullptr, &pipeline);
+    
+    render::pipeline_manager.compilation_mutex.lock();
+    vk_pipeline_layout = pipeline_layout;
+    vk_pipeline        = pipeline;
+    render::pipeline_manager.compilation_mutex.unlock();
 
     if (vk_result != VK_SUCCESS) {
         throw std::runtime_error("FAILED TO CREATE GRAPHICS PIPELINE");
     }
 }
+void Pipeline::Terminate(){
+    vkDestroyPipeline(render::context.vk_device, vk_pipeline, nullptr);
+    vkDestroyPipelineLayout(render::context.vk_device, vk_pipeline_layout, nullptr);
+}
+
 void Pipeline::Bind(VkCommandBuffer command_buffer){
     vkCmdBindPipeline(command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_pipeline);
 }
@@ -225,22 +227,23 @@ void Pipeline::PushConstant(VkCommandBuffer vk_command_buffer,
                             VkDeviceSize size, VkDeviceSize offset, void* data){
     vkCmdPushConstants(vk_command_buffer, vk_pipeline_layout, VK_SHADER_STAGE_VERTEX_BIT, 0, 64, data);
 }
-
-
-namespace PipelineManager{
-std::mutex compilation_mutex;
-std::condition_variable compilation_condition_variable;
+void Pipeline::BindDescriptorSet(VkCommandBuffer vk_command_buffer, 
+                                 DescriptorSet descriptor_set, uint32_t binding){
+    vkCmdBindDescriptorSets(vk_command_buffer, VK_PIPELINE_BIND_POINT_GRAPHICS, vk_pipeline_layout, 
+                            binding, 1, &descriptor_set.vk_descriptor_set, 0, nullptr);
 }
 
-void PipelineManager::Initialize(){
-}
-void PipelineManager::Terminate(){
-}
+
+
+
+PipelineManager pipeline_manager{};
+void PipelineManager::Initialize(){}
+void PipelineManager::Terminate(){}
 
 Pipeline* PipelineManager::Compile(PipelineInfo info){
     Pipeline* new_pipeline = new Pipeline{};
     
-    ThreadPool::Dispatch([new_pipeline, info]{
+    ThreadPool::Dispatch([this, new_pipeline, info]{
         new_pipeline->Initialize(info);
         compilation_condition_variable.notify_all();
         return ThreadPool::ReturnState::COMPLETE;
@@ -256,8 +259,7 @@ void PipelineManager::AwaitCompilation(Pipeline* pipeline){
 }
 
 void PipelineManager::Destroy(Pipeline* pipeline){
-    // Implement removal of name from hashmap
-    // Implement layout refcount decrease
+    pipeline->Terminate();
     delete pipeline;
 }
 }

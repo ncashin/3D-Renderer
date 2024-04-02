@@ -1,6 +1,45 @@
 #include "render_buffer.h"
 
 namespace render{
+Renderpass:: Renderpass(){};
+Renderpass::~Renderpass(){};
+
+void Renderpass::Initialize(RenderpassInfo info){
+    std::vector<VkAttachmentDescription> vk_attachment_descriptions;
+    for(Attachment attachment : info.attachments){
+        VkAttachmentDescription vk_attachment{};
+        vk_attachment.flags = 0;
+        vk_attachment.initialLayout = attachment.initial_layout;
+        vk_attachment.finalLayout   = attachment.final_layout;
+        vk_attachment.format  = attachment.format;
+        vk_attachment.loadOp  = (VkAttachmentLoadOp) attachment.load_op;
+        vk_attachment.storeOp = (VkAttachmentStoreOp)attachment.store_op;
+        vk_attachment.samples = VK_SAMPLE_COUNT_1_BIT;
+        vk_attachment_descriptions.emplace_back(vk_attachment);
+    }
+    std::vector<VkSubpassDescription> vk_subpass_descriptions;
+    for(Subpass subpass : info.subpasses){
+        VkSubpassDescription vk_subpass{};
+        vk_subpass.flags = 0;
+        vk_subpass.colorAttachmentCount    = (uint32_t)subpass.color_attachments.size();
+        vk_subpass.pColorAttachments       = (VkAttachmentReference*)subpass.color_attachments.data();
+        vk_subpass.pDepthStencilAttachment = (VkAttachmentReference*)subpass.depth_stencil_attachment;
+        vk_subpass_descriptions.emplace_back(vk_subpass);
+    }
+    
+    VkRenderPassCreateInfo create_info{};
+    create_info.sType = VK_STRUCTURE_TYPE_RENDER_PASS_CREATE_INFO;
+    create_info.pNext = nullptr;
+    create_info.flags = 0;
+    create_info.attachmentCount = (uint32_t)vk_attachment_descriptions.size();
+    create_info.pAttachments    = vk_attachment_descriptions.data();
+    create_info.subpassCount = (uint32_t)vk_subpass_descriptions.size();
+    create_info.pSubpasses   = vk_subpass_descriptions.data();
+    create_info.dependencyCount = 0;
+    create_info.pDependencies   = nullptr;
+    vkCreateRenderPass(render::context.vk_device, &create_info, nullptr, &vk_render_pass);
+}
+
 RenderBuffer::RenderBuffer(Swapchain* swapchain) : swapchain_attachment(swapchain) {
     extent.width  = 1440;
     extent.height = 1080;

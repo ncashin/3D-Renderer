@@ -10,11 +10,11 @@ public:
     void Terminate();
     
     template<typename T>
-    char* UploadToBAllocation(TemplateAllocatedBuffer template_buffer, BAllocation<T> allocation){
+    void* UploadToTBAllocation(SuballocatedBuffer template_buffer, TBAllocation<T> allocation){
         return UploadToBuffer(allocation.count * sizeof(T), allocation.offset * sizeof(T), &template_buffer.buffer);
     }
-    char* UploadToBuffer(size_t upload_size, size_t offset, Buffer*  buffer);
-    char* UploadToImage (size_t upload_size, Texture* texture);
+    void* UploadToBuffer(size_t upload_size, size_t offset, Buffer*  buffer);
+    void* UploadToImage (size_t upload_size, Texture* texture);
     
     void SubmitUpload(SubmitInfo submit_info);
     void AwaitUploadCompletion();

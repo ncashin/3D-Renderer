@@ -81,15 +81,15 @@ void RegionList::FreeRegion(Region free_memory){
 }
 
 // --- Vertex Buffer --- //
-TemplateAllocatedBuffer device_local_buffer;
-TemplateAllocatedBuffer:: TemplateAllocatedBuffer(){};
-TemplateAllocatedBuffer::~TemplateAllocatedBuffer(){};
+SuballocatedBuffer gpu_buffer;
+SuballocatedBuffer:: SuballocatedBuffer(){};
+SuballocatedBuffer::~SuballocatedBuffer(){};
 
-void TemplateAllocatedBuffer::Initialize(BufferInfo buffer_info){
+void SuballocatedBuffer::Initialize(BufferInfo buffer_info){
     buffer.Initialize(buffer_info);
     region_list = RegionList(0, buffer_info.size);
 }
-void TemplateAllocatedBuffer::Terminate(){
+void SuballocatedBuffer::Terminate(){
     buffer.Terminate();
 }
 }

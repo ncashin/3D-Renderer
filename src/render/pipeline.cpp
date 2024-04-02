@@ -164,7 +164,6 @@ void Pipeline::Initialize(PipelineInfo info){
     blend_state.blendConstants[3] = 0.0f;
     
     /* Pipeline Layout */
-    
     VkPipelineLayoutCreateInfo layout_info{};
     layout_info.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
     layout_info.pushConstantRangeCount = (uint32_t)info.push_constant_ranges.size();

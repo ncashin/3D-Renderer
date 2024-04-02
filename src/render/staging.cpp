@@ -42,7 +42,7 @@ void StagingManager::Terminate(){
     staging_buffer.Terminate();
 }
 
-char* StagingManager::UploadToBuffer(size_t upload_size, size_t offset, Buffer* buffer){
+void* StagingManager::UploadToBuffer(size_t upload_size, size_t offset, Buffer* buffer){
     char* buffer_pointer = mapped_pointer + staging_buffer_offset;
     VkBufferCopy buffer_copy{};
     buffer_copy.size = upload_size;
@@ -54,7 +54,7 @@ char* StagingManager::UploadToBuffer(size_t upload_size, size_t offset, Buffer* 
     staging_buffer_offset += upload_size;
     return buffer_pointer;
 }
-char* StagingManager::UploadToImage (size_t upload_size, Texture* texture){
+void* StagingManager::UploadToImage (size_t upload_size, Texture* texture){
     char* buffer_pointer = mapped_pointer + staging_buffer_offset;
 
     {

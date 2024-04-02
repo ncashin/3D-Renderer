@@ -14,15 +14,13 @@
 #include "render/render.h"
 
 using namespace engine;
-
-struct Vertex {
-    glm::vec3 position;
-    glm::vec2 texture_coordinate;
-};
-
 class Camera{
 public:
-    static render::PushConstantRange PUSH_CONSTANT_RANGE;
+    static render::PushConstantRange PushConstantRange(uint32_t offset){
+        return {
+            render::SHADER_STAGE_VERTEX, offset, sizeof(glm::mat4),
+        };
+    }
     glm::mat4 GetViewProjection(float aspect_ratio){
         glm::vec3 direction;
         direction.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
@@ -50,9 +48,6 @@ public:
     float z_near = 1.0f;
     float z_far = 10000.0f;
     glm::mat4 projection;
-};
-render::PushConstantRange Camera::PUSH_CONSTANT_RANGE = {
-    render::SHADER_STAGE_VERTEX, 0, sizeof(glm::mat4),
 };
 
 bool running = true;
@@ -121,6 +116,12 @@ void UpdateCamera(){
       camera.pitch = -89.0f;
 }
 
+MESH_VERTEX_STRUCT Vertex {
+    MVS_POSITION(pos);
+    MVS_TEXTURE_COORDINATE_2D(tc2d);
+    MVS_NORMAL(norm);
+};
+
 #include <chrono>
 #include <iostream>
 int main(int argc, char** argv){
@@ -138,18 +139,19 @@ int main(int argc, char** argv){
     context_info.applcation_name = "engine";
     context_info.engine_name = "engine";
     render::context.Initalize(context_info);
+    
     render::descriptor_allocator.Initialize();
     render::pipeline_manager.Initialize();
     render::command_manager.Initialize();
     render::staging_manager.Initialize();
-    render::device_local_buffer.Initialize({
-        100000000,
+    render::gpu_buffer.Initialize({
+        1000000000,
         VK_BUFFER_USAGE_VERTEX_BUFFER_BIT |
         VK_BUFFER_USAGE_INDEX_BUFFER_BIT  |
         VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         VMA_MEMORY_USAGE_GPU_ONLY, 0
     });
-    
+
     auto swapchain      = new render::Swapchain(&window);
     auto render_buffer  = new render::RenderBuffer(swapchain);
     
@@ -160,7 +162,6 @@ int main(int argc, char** argv){
         render::SHADER_STAGE_FRAGMENT, render::SHADER_FORMAT_SPIRV, "frag.spv"
     });
     
-    
     auto set_layout = render::DescriptorSetLayout{};
     set_layout.Initialize({
         {0, VK_DESCRIPTOR_TYPE_SAMPLER,       1, render::SHADER_STAGE_FRAGMENT, nullptr},
@@ -168,55 +169,45 @@ int main(int argc, char** argv){
     });
     
     render::PipelineInfo pipeline_info{};
-    pipeline_info.push_constant_ranges   = { Camera::PUSH_CONSTANT_RANGE, };
+    pipeline_info.push_constant_ranges   = { Camera::PushConstantRange(0), };
     pipeline_info.descriptor_set_layouts = { set_layout, };
     
     pipeline_info.vertex_attributes = {
-        {0, 0, VK_FORMAT_R32G32B32_SFLOAT,    offsetof(Vertex, position)},
-        {1, 0, VK_FORMAT_R32G32_SFLOAT,       offsetof(Vertex, texture_coordinate)},
+        render::MeshVertexStruct::PositionAttribute<Vertex>(0, 0),
+        render::MeshVertexStruct::TextureCoordinate2DAttribute<Vertex>(1, 0),
     };
     pipeline_info.vertex_bindings = {
-        {0, sizeof(Vertex), VK_VERTEX_INPUT_RATE_VERTEX},
+        render::MeshVertexStruct::Binding<Vertex>(0),
     };
-    
+
     pipeline_info.render_buffer = render_buffer;
     pipeline_info.shaders = { vertex_shader, fragment_shader };
     
-    pipeline_info.front_face = render::NGFX_FRONT_FACE_CCW;
-    pipeline_info.cull_mode  = render::NGFX_CULL_MODE_NONE;
+    pipeline_info.front_face = render::NGFX_FRONT_FACE_CW;
+    pipeline_info.cull_mode  = render::NGFX_CULL_MODE_BACK_FACE;
     
     pipeline_info.depth_test_enabled = true;
     pipeline_info.depth_write_enabled = true;
     render::Pipeline* pipeline = render::pipeline_manager.Compile(pipeline_info);
     
-    auto vertex_allocation = render::device_local_buffer.Allocate<Vertex>  (300000);
-    auto index_allocation  = render::device_local_buffer.Allocate<uint32_t>(300000);
-
     uint32_t vertex_count = 0;
     uint32_t index_count  = 0;
-    
-    char* vertex_staging_pointer =
-    render::staging_manager.UploadToBAllocation(render::device_local_buffer, vertex_allocation);
-    char* index_staging_pointer =
-    render::staging_manager.UploadToBAllocation(render::device_local_buffer, index_allocation);
-    
-    Asset::LoadMesh(vertex_staging_pointer, index_staging_pointer,
-                    &vertex_count, &index_count, "backpack/backpack.obj");
-    
+
+    auto mesh = asset::GetMesh<Vertex>("backpack/backpack.obj");
     render::Sampler sampler{};
     sampler.Initialize();
     
     render::Texture texture{};
     texture.Initialize({100, 100, 1});
-    
+
     const VkDeviceSize image_bytesize = 100 * 100 * sizeof(glm::vec4);
-    char* staging_pointer = render::staging_manager.UploadToImage(image_bytesize, &texture);
+    char* staging_pointer = (char*)render::staging_manager.UploadToImage(image_bytesize, &texture);
     char* test = new char[image_bytesize];
     for(uint32_t i = 0; i < image_bytesize; i++){
         ((uint8_t*)test)[i] = rand() % UINT8_MAX;
     }
     std::memcpy(staging_pointer, test, image_bytesize);
-    
+
     auto descriptor_set = render::descriptor_allocator.Allocate(set_layout);
     sampler.WriteDescriptor(descriptor_set.vk_descriptor_set, 0, 0);
     texture.WriteDescriptor(descriptor_set.vk_descriptor_set, 1, 0);
@@ -279,13 +270,13 @@ int main(int argc, char** argv){
 
         render::command_manager.SubmitGraphics(submit_info,
                                               [render_buffer, swapchain, image_index, pipeline,
-                                               view_projection, descriptor_set, vertex_allocation, index_allocation]
+                                               view_projection, descriptor_set, &mesh]
                                                (VkCommandBuffer vk_command_buffer){
             render_buffer->Begin(vk_command_buffer, swapchain, image_index);
             pipeline->Bind(vk_command_buffer);
             
-            render::device_local_buffer.buffer.BindAsVertexBuffer(vk_command_buffer, 0);
-            render::device_local_buffer.buffer.BindAsIndexBuffer (vk_command_buffer, 0);
+            render::gpu_buffer.buffer.BindAsVertexBuffer(vk_command_buffer, 0);
+            render::gpu_buffer.buffer.BindAsIndexBuffer (vk_command_buffer, 0);
             
             pipeline->PushConstant(vk_command_buffer, 0, sizeof(glm::mat4), (void*)&view_projection);
             pipeline->BindDescriptorSet(vk_command_buffer, descriptor_set, 0);
@@ -304,8 +295,7 @@ int main(int argc, char** argv){
             scissor.extent = swapchain->extent_;
             vkCmdSetScissor(vk_command_buffer, 0, 1, &scissor);
             
-            //vkCmdDraw(vk_command_buffer, vertex_count, 1, 0, 0);
-            vkCmdDrawIndexed(vk_command_buffer, index_allocation.count, 1, index_allocation.offset, vertex_allocation.offset, 0);
+            mesh.Draw(vk_command_buffer, 1, 0);
             
             vkCmdEndRenderPass(vk_command_buffer);
         });
@@ -325,7 +315,7 @@ int main(int argc, char** argv){
     swapchain_semaphore.Terminate();
     render_finished_semaphore.Terminate();
 
-    render::device_local_buffer.Terminate();
+    render::gpu_buffer.Terminate();
     render::pipeline_manager.Destroy(pipeline);
     set_layout.Terminate();
 

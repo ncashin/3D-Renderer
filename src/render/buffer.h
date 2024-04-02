@@ -42,29 +42,29 @@ private:
 
 
 template<typename T>
-struct BAllocation{
+struct TBAllocation{
     uint32_t offset;
     uint32_t count;
 };
-class TemplateAllocatedBuffer{
+class SuballocatedBuffer{
 public:
-     TemplateAllocatedBuffer();
-    ~TemplateAllocatedBuffer();
+     SuballocatedBuffer();
+    ~SuballocatedBuffer();
     
     void Initialize(BufferInfo buffer_info);
     void Terminate();
     
     template<typename T>
-    BAllocation<T> Allocate(uint32_t count){
+    TBAllocation<T> Allocate(uint32_t count){
         Region region{};
         region_list.GetRegion(sizeof(T) * count, sizeof(T), &region);
-        BAllocation<T> allocation;
+        TBAllocation<T> allocation;
         allocation.offset = region.offset / sizeof(T);
         allocation.count  = count;
         return allocation;
     }
     template<typename T>
-    void Free(BAllocation<T> allocation){
+    void Free(TBAllocation<T> allocation){
         Region region{sizeof(T) * allocation.offset, sizeof(T) * allocation.count};
         region_list.FreeRegion(region);
     }
@@ -72,5 +72,5 @@ public:
     RegionList region_list;
     Buffer buffer;
 };
-extern TemplateAllocatedBuffer device_local_buffer;
+extern SuballocatedBuffer gpu_buffer;
 }

@@ -10,6 +10,8 @@
 #include "render/buffer.h"
 #include "render/texture.h"
 
+#include "render/mesh.h"
+
 #include "render/command.h"
 
 #include "render/staging.h"

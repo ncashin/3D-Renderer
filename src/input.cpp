@@ -2,7 +2,6 @@
 
 #include "stdio.h"
 #include <memory>
-namespace engine{
 float     Input::mouse_scroll = 0.0f;
 glm::vec2 Input::mouse_position;
 glm::vec2 Input::mouse_offset;
@@ -42,5 +41,4 @@ glm::vec2 Input::GetMousePosition(){
 }
 glm::vec2 Input::GetMouseOffset(){
     return mouse_offset;
-}
 }

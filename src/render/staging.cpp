@@ -55,8 +55,7 @@ void* StagingManager::UploadToBuffer(size_t upload_size, size_t offset, Buffer* 
     return buffer_pointer;
 }
 void* StagingManager::UploadToImage (size_t upload_size, Texture* texture){
-    char* buffer_pointer = mapped_pointer + staging_buffer_offset;
-
+    void* buffer_pointer = mapped_pointer + staging_buffer_offset;
     {
         VkImageMemoryBarrier barrier{};
         barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
@@ -73,15 +72,15 @@ void* StagingManager::UploadToImage (size_t upload_size, Texture* texture){
     
     VkBufferImageCopy copy{};
     copy.bufferOffset = staging_buffer_offset;
-    copy.bufferRowLength   = 100;
-    copy.bufferImageHeight = 100;
+    copy.bufferRowLength   = 0;
+    copy.bufferImageHeight = 0;
     
     copy.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
     copy.imageSubresource.baseArrayLayer = 0;
     copy.imageSubresource.layerCount = 1;
     copy.imageSubresource.mipLevel = 0;
     copy.imageOffset = {0, 0, 0};
-    copy.imageExtent = {100, 100, 1};
+    copy.imageExtent = {texture->image_extent.width, texture->image_extent.height, 1};
     
     vkCmdCopyBufferToImage(vk_command_buffer, staging_buffer.vk_buffer, 
                            texture->vk_image, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, 1, &copy);

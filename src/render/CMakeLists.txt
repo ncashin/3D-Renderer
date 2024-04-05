@@ -10,4 +10,5 @@ ${CMAKE_CURRENT_LIST_DIR}/swapchain.h  ${CMAKE_CURRENT_LIST_DIR}/swapchain.cpp
 ${CMAKE_CURRENT_LIST_DIR}/render_buffer.h ${CMAKE_CURRENT_LIST_DIR}/render_buffer.cpp
 ${CMAKE_CURRENT_LIST_DIR}/pipeline.h   ${CMAKE_CURRENT_LIST_DIR}/pipeline.cpp
 ${CMAKE_CURRENT_LIST_DIR}/command.h    ${CMAKE_CURRENT_LIST_DIR}/command.cpp
-${CMAKE_CURRENT_LIST_DIR}/staging.h    ${CMAKE_CURRENT_LIST_DIR}/staging.cpp)
+${CMAKE_CURRENT_LIST_DIR}/staging.h    ${CMAKE_CURRENT_LIST_DIR}/staging.cpp
+${CMAKE_CURRENT_LIST_DIR}/camera.h    ${CMAKE_CURRENT_LIST_DIR}/camera.cpp)

@@ -2,7 +2,6 @@
 
 #include "glm/glm.hpp"
 
-namespace engine{
 enum class ScanCode{
     Unknown = 0,
 
@@ -327,4 +326,4 @@ public:
     
     static InputState scancode_state[SCANCODE_COUNT];
 };
-}
+

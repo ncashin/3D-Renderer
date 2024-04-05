@@ -7,7 +7,6 @@
 #include "render/mesh.h"
 #include "render/staging.h"
 
-namespace engine{
 namespace asset{
 enum Type{
     TYPE_SHADER,
@@ -15,7 +14,7 @@ enum Type{
     TYPE_MESH,
 };
 
-
+render::Texture GetTexture(const char* filepath);
 
 template<typename T>
 render::Mesh<T> GetMesh(const char* filepath){
@@ -54,20 +53,18 @@ render::Mesh<T> GetMesh(const char* filepath){
     for(uint32_t i = 0; i < scene->mNumMeshes; i++){
         aiMesh* mesh = scene->mMeshes[i];
         for(uint32_t vertex_index = 0; vertex_index < mesh->mNumVertices; vertex_index++){
-            if constexpr (render::MeshVertexStruct::HasPosition<T>()){
+            if constexpr (render::MVS::HasPosition<T>()){
                 *(aiVector3D*)&vertex_destination->MVS_position = mesh->mVertices[vertex_index];
             }
-            if constexpr (render::MeshVertexStruct::HasTextureCoordinate2D<T>()){
+            if constexpr (render::MVS::HasTextureCoordinate2D<T>()){
                 if(mesh->mTextureCoords[0] != nullptr){
-                    aiVector2D coordinate;
-                    coordinate.x = mesh->mTextureCoords[0][vertex_index].x;
-                    coordinate.y = mesh->mTextureCoords[0][vertex_index].y;
-                    *(aiVector2D*)&vertex_destination->MVS_texture_coordinate_2d = coordinate;
+                    vertex_destination->MVS_texture_coordinate_2d.x = mesh->mTextureCoords[0][vertex_index].x;
+                    vertex_destination->MVS_texture_coordinate_2d.y = mesh->mTextureCoords[0][vertex_index].y;
                 }else{
                     *(aiVector2D*)&vertex_destination->MVS_texture_coordinate_2d = {};
                 }
             }
-            if constexpr (render::MeshVertexStruct::HasTextureCoordinate3D<T>()){
+            if constexpr (render::MVS::HasTextureCoordinate3D<T>()){
                 if(mesh->mTextureCoords[0] != nullptr){
                     *(aiVector3D*)&vertex_destination->MVS_texture_coordinate_3d 
                     = mesh->mTextureCoords[0][vertex_index];
@@ -75,7 +72,7 @@ render::Mesh<T> GetMesh(const char* filepath){
                     *(aiVector3D*)&vertex_destination->MVS_texture_coordinate_3d = {};
                 }
             }
-            if constexpr (render::MeshVertexStruct::HasNormal<T>()){
+            if constexpr (render::MVS::HasNormal<T>()){
                 if(mesh->mNormals != nullptr){
                     *(aiVector3D*)&vertex_destination->MVS_normal = mesh->mNormals[vertex_index];
                 }else{
@@ -101,4 +98,4 @@ render::Mesh<T> GetMesh(const char* filepath){
     return render_mesh;
 };
 }
-}
+

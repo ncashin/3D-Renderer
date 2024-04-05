@@ -23,7 +23,7 @@ enum MeshAttributeFlags{
     MESH_ATTRIBUTE_NORMAL = 8,
 };
 
-namespace MeshVertexStruct{
+namespace MVS{
 template <typename T, typename = int>
 struct HasPosition : std::false_type { };
 
@@ -91,7 +91,6 @@ public:
         vkCmdDrawIndexed(vk_command_buffer,
                          index_allocation.count,  instance_count,
                          index_allocation.offset, vertex_allocation.offset, instance_offset);
-        printf("vertex_offset: %u, index offset: %u\n", vertex_allocation.offset, index_allocation.offset);
     }
     /*template<typename IT>
     void Draw(VkCommandBuffer vk_command_buffer, BAllocation<IT> instance_allocation,

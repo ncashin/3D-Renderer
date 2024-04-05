@@ -15,3 +15,5 @@
 #include "render/command.h"
 
 #include "render/staging.h"
+
+#include "render/camera.h"

@@ -1,54 +1,23 @@
+#include <chrono>
+#include <iostream>
 
 #include "thread_pool.h"
 #include "window.h"
 #include "input.h"
 #include "asset.h"
 
+#ifndef GLM_FORCE_DEPTH_ZERO_TO_ONE
 #define GLM_FORCE_DEPTH_ZERO_TO_ONE
-#include <glm/glm.hpp>
+#endif
+
 #ifndef GLM_ENABLE_EXPERIMENTAL
 #define GLM_ENABLE_EXPERIMENTAL
 #endif
+
+#include "glm/glm.hpp"
 #include "glm/gtx/transform.hpp"
 
 #include "render/render.h"
-
-using namespace engine;
-class Camera{
-public:
-    static render::PushConstantRange PushConstantRange(uint32_t offset){
-        return {
-            render::SHADER_STAGE_VERTEX, offset, sizeof(glm::mat4),
-        };
-    }
-    glm::mat4 GetViewProjection(float aspect_ratio){
-        glm::vec3 direction;
-        direction.x = cos(glm::radians(yaw)) * cos(glm::radians(pitch));
-        direction.y = sin(glm::radians(pitch));
-        direction.z = sin(glm::radians(yaw)) * cos(glm::radians(pitch));
-        front = glm::normalize(direction);
-        
-        glm::mat4 view = glm::lookAt(position, position + front, up);
-        
-        if(orthographic){
-            return glm::ortho(view_size * aspect_ratio, -view_size * aspect_ratio, view_size, -view_size,
-                              z_far, z_near) * view;
-        }
-        return glm::perspective(-glm::radians(view_size), aspect_ratio, z_near, z_far) * view;
-    }
-    
-    glm::vec3 position = glm::vec3(0.0f, 0.0f, -5.0f);
-    glm::vec3 front    = glm::vec3(0.0f, 0.0f,  1.0f);
-    glm::vec3 up       = glm::vec3(0.0f, 1.0f,  0.0f);
-    
-    bool orthographic = false;
-    float yaw = 90.0f;
-    float pitch = 0.0f;
-    float view_size = 10.0f;
-    float z_near = 1.0f;
-    float z_far = 10000.0f;
-    glm::mat4 projection;
-};
 
 bool running = true;
 void HandleEvent(){
@@ -83,7 +52,7 @@ void HandleEvent(){
     }
 }
 
-Camera camera{};
+render::Camera camera{};
 float camera_speed = 0.1f;
 const float camera_sensitivity = 0.1f;
 const float camera_zoom_sensitivity = 0.4f;
@@ -119,11 +88,8 @@ void UpdateCamera(){
 MESH_VERTEX_STRUCT Vertex {
     MVS_POSITION(pos);
     MVS_TEXTURE_COORDINATE_2D(tc2d);
-    MVS_NORMAL(norm);
 };
 
-#include <chrono>
-#include <iostream>
 int main(int argc, char** argv){
     const uint32_t thread_count = 1;
     ThreadPool::Initialize(thread_count);
@@ -169,23 +135,19 @@ int main(int argc, char** argv){
     });
     
     render::PipelineInfo pipeline_info{};
-    pipeline_info.push_constant_ranges   = { Camera::PushConstantRange(0), };
+    pipeline_info.push_constant_ranges   = { render::Camera::PushConstantRange(0), };
     pipeline_info.descriptor_set_layouts = { set_layout, };
-    
     pipeline_info.vertex_attributes = {
-        render::MeshVertexStruct::PositionAttribute<Vertex>(0, 0),
-        render::MeshVertexStruct::TextureCoordinate2DAttribute<Vertex>(1, 0),
+        render::MVS::PositionAttribute<Vertex>(0, 0),
+        render::MVS::TextureCoordinate2DAttribute<Vertex>(1, 0),
     };
     pipeline_info.vertex_bindings = {
-        render::MeshVertexStruct::Binding<Vertex>(0),
+        render::MVS::Binding<Vertex>(0),
     };
-
     pipeline_info.render_buffer = render_buffer;
     pipeline_info.shaders = { vertex_shader, fragment_shader };
-    
     pipeline_info.front_face = render::NGFX_FRONT_FACE_CW;
     pipeline_info.cull_mode  = render::NGFX_CULL_MODE_BACK_FACE;
-    
     pipeline_info.depth_test_enabled = true;
     pipeline_info.depth_write_enabled = true;
     render::Pipeline* pipeline = render::pipeline_manager.Compile(pipeline_info);
@@ -193,21 +155,21 @@ int main(int argc, char** argv){
     uint32_t vertex_count = 0;
     uint32_t index_count  = 0;
 
-    auto mesh = asset::GetMesh<Vertex>("backpack/backpack.obj");
+    auto mesh    = asset::GetMesh<Vertex>("backpack/backpack.obj");
+    auto texture = asset::GetTexture("backpack/diffuse.jpg");
+    
     render::Sampler sampler{};
     sampler.Initialize();
     
-    render::Texture texture{};
+    /*render::Texture texture{};
     texture.Initialize({100, 100, 1});
 
     const VkDeviceSize image_bytesize = 100 * 100 * sizeof(glm::vec4);
     char* staging_pointer = (char*)render::staging_manager.UploadToImage(image_bytesize, &texture);
-    char* test = new char[image_bytesize];
     for(uint32_t i = 0; i < image_bytesize; i++){
-        ((uint8_t*)test)[i] = rand() % UINT8_MAX;
-    }
-    std::memcpy(staging_pointer, test, image_bytesize);
-
+        ((uint8_t*)staging_pointer)[i] = rand() % UINT8_MAX;
+    }*/
+    
     auto descriptor_set = render::descriptor_allocator.Allocate(set_layout);
     sampler.WriteDescriptor(descriptor_set.vk_descriptor_set, 0, 0);
     texture.WriteDescriptor(descriptor_set.vk_descriptor_set, 1, 0);
@@ -217,10 +179,8 @@ int main(int argc, char** argv){
     render::Fence fence{};
     fence.Initialize(render::Fence::InitializeSignaled);
     
-    
     render::Semaphore render_finished_semaphore;
     render_finished_semaphore.Initialize();
-    
     render::Semaphore swapchain_semaphore;
     swapchain_semaphore.Initialize();
     
@@ -230,9 +190,7 @@ int main(int argc, char** argv){
     
     render::staging_manager.AwaitUploadCompletion();
     
-    using micro = std::chrono::microseconds;
     auto  start = std::chrono::high_resolution_clock::now();
-    
     bool submission_fence = true;
     while(running){
         Input::Flush();
@@ -245,11 +203,14 @@ int main(int argc, char** argv){
         
         render::command_manager.WaitForFence(&fence);
         render::command_manager.ResetFence(&fence);
-        auto  finish = std::chrono::high_resolution_clock::now();
-        std::cout << "Frame Time: " 
-        << std::chrono::duration_cast<micro>(finish - start).count()
-        << " microseconds\n";
-        start = std::chrono::high_resolution_clock::now();
+        {
+            auto  finish = std::chrono::high_resolution_clock::now();
+            std::cout << "Frame Time: "
+            << std::chrono::duration_cast<std::chrono::microseconds>(finish - start).count()
+            << " microseconds\n";
+            start = std::chrono::high_resolution_clock::now();
+        }
+        
         /*render::descriptor_allocator.Flush();
         auto descriptor_set = render::descriptor_allocator.Allocate(set_layout);
         auto a = render::descriptor_allocator.Allocate(set_layout);
@@ -325,11 +286,9 @@ int main(int argc, char** argv){
     render::staging_manager.Terminate();
     render::command_manager.Terminate();
     render::pipeline_manager.Terminate();
-    
     render::descriptor_allocator.Terminate();
     
     delete render_buffer;
-    
     delete swapchain;
 
     render::context.Terminate();

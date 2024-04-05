@@ -1,2 +1,3 @@
 # 3D Renderer
-Low Level Renderer attempting to build ease of use features without compromising accessibility or ease of use
+Built With: C++, Vulkan, CMake, alongside some supporting libraries(repo links in vendor folder).
+Currently Able To: Load Textures 3D Models create graphics pipelines, record and submit vulkan commands across multiple threads using a threadpool

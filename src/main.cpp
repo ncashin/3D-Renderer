@@ -85,19 +85,16 @@ void UpdateCamera(){
       camera.pitch = -89.0f;
 }
 
-MESH_VERTEX_STRUCT Vertex {
-    MVS_POSITION(pos);
-    MVS_TEXTURE_COORDINATE_2D(tc2d);
-};
-
-int main(int argc, char** argv){
+render::Window window{};
+void Initialize(){
     const uint32_t thread_count = 1;
-    ThreadPool::Initialize(thread_count);
+    core::threadpool.Initialize(thread_count);
     
     SDL_Init(SDL_INIT_EVERYTHING);
     SDL_DisplayMode display_mode;
     SDL_GetCurrentDisplayMode(0, &display_mode);
-    render::Window window("engine", display_mode.w, display_mode.h);
+
+    window.Initialize({"engine", display_mode.w, display_mode.h});
 
     render::ContextInfo context_info{};
     context_info.window = &window;
@@ -117,7 +114,15 @@ int main(int argc, char** argv){
         VK_BUFFER_USAGE_TRANSFER_DST_BIT,
         VMA_MEMORY_USAGE_GPU_ONLY, 0
     });
+}
 
+MESH_VERTEX_STRUCT Vertex {
+    MVS_POSITION(pos);
+    MVS_TEXTURE_COORDINATE_2D(tc2d);
+};
+
+int main(int argc, char** argv){
+    Initialize();
     auto swapchain      = new render::Swapchain(&window);
     auto render_buffer  = new render::RenderBuffer(swapchain);
     
@@ -292,5 +297,8 @@ int main(int argc, char** argv){
     delete swapchain;
 
     render::context.Terminate();
-    ThreadPool::Terminate();
+    
+    window.Terminate();
+    
+    core::threadpool.Terminate();
 }

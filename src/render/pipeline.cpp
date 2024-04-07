@@ -242,10 +242,10 @@ void PipelineManager::Terminate(){}
 Pipeline* PipelineManager::Compile(PipelineInfo info){
     Pipeline* new_pipeline = new Pipeline{};
     
-    ThreadPool::Dispatch([this, new_pipeline, info]{
+    core::threadpool.Dispatch([this, new_pipeline, info]{
         new_pipeline->Initialize(info);
         compilation_condition_variable.notify_all();
-        return ThreadPool::ReturnState::COMPLETE;
+        return core::Threadpool::TASK_COMPLETE;
     });
     
     return new_pipeline;

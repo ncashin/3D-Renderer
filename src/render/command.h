@@ -42,11 +42,20 @@ struct PresentInfo{
     std::vector<uint32_t>   image_indices;
 };
 
+class CommandBuffer{
+public:
+    uint8_t record_count = 1;
+    uint8_t record_complete_count = 0;
+    VkCommandBuffer vk_command_buffer;
+};
+
 class CommandManager{
 public:
     void Initialize();
     void Terminate();
     
+    CommandBuffer* RecordAsync(std::function<void(VkCommandBuffer)> record_function);
+    void SubmitAsync(SubmitInfo submit_info, CommandBuffer* command_buffer);
     
     void SubmitGraphics(SubmitInfo submission_info,
                         VkCommandBuffer vk_command_buffer);

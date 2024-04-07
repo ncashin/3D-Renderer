@@ -51,13 +51,60 @@ void CommandManager::Terminate(){
     vkDestroyCommandPool(render::context.vk_device, primary_graphics_command_pool, nullptr);
 }
 
+CommandBuffer* CommandManager::RecordAsync(std::function<void(VkCommandBuffer)> record_function){
+    CommandBuffer* command_buffer = new CommandBuffer{};
+    command_buffer->vk_command_buffer = primary_graphics_command_buffers[0];
+    core::threadpool.Dispatch([command_buffer, record_function]{
+        vkResetCommandBuffer(command_buffer->vk_command_buffer, 0);
+        VkCommandBufferBeginInfo begin_info{};
+        begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+        begin_info.pNext = nullptr;
+        begin_info.flags = 0;
+        begin_info.pInheritanceInfo = nullptr;
+        vkBeginCommandBuffer(command_buffer->vk_command_buffer, &begin_info);
+        record_function(command_buffer->vk_command_buffer);
+        
+        command_buffer->record_complete_count++;
+        return core::Threadpool::TASK_COMPLETE;
+    });
+    return command_buffer;
+}
+void CommandManager::SubmitAsync(SubmitInfo submit_info, CommandBuffer* command_buffer){
+    core::threadpool.Dispatch([this, submit_info, command_buffer]{
+        if(command_buffer->record_count != command_buffer->record_complete_count){
+            return core::Threadpool::TASK_NOT_READY;
+        }
+        vkEndCommandBuffer(command_buffer->vk_command_buffer);
+
+        VkSubmitInfo vk_submit_info{};
+        vk_submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+        vk_submit_info.pNext = nullptr;
+        
+        vk_submit_info.waitSemaphoreCount = (uint32_t)submit_info.wait_semaphores.size();
+        vk_submit_info.pWaitSemaphores    = (VkSemaphore*)submit_info.wait_semaphores.data();
+        vk_submit_info.pWaitDstStageMask  = &submit_info.wait_stage_flags;
+        
+        vk_submit_info.signalSemaphoreCount = (uint32_t)submit_info.signal_semaphores.size();
+        vk_submit_info.pSignalSemaphores    = (VkSemaphore*)submit_info.signal_semaphores.data();
+        
+        vk_submit_info.commandBufferCount = 1;
+        vk_submit_info.pCommandBuffers    = &command_buffer->vk_command_buffer;
+        
+        vkQueueSubmit(render::context.graphics_queue.vk_queue, 1, &vk_submit_info, submit_info.fence->vk_fence);
+
+        return core::Threadpool::TASK_COMPLETE;
+    });
+}
+
+
 void CommandManager::SubmitGraphics(SubmitInfo submit_info, VkCommandBuffer vk_command_buffer){
     uint32_t id = submit_id++;
-    ThreadPool::Dispatch([this, submit_info, vk_command_buffer, id]{
+    core::threadpool.Dispatch([this, submit_info, vk_command_buffer, id]{
         if(id != to_submit_id){
-            return ThreadPool::ReturnState::REDISPATCH;
+            return core::Threadpool::TASK_NOT_READY;
         }
-        
+        //vkEndCommandBuffer(command_buffer->vk_command_buffer);
+
         VkSubmitInfo vk_submit_info{};
         vk_submit_info.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
         vk_submit_info.pNext = nullptr;
@@ -80,7 +127,7 @@ void CommandManager::SubmitGraphics(SubmitInfo submit_info, VkCommandBuffer vk_c
             submission_condition_variable.notify_all();
         }
         
-        return ThreadPool::ReturnState::COMPLETE;
+        return core::Threadpool::TASK_COMPLETE;
     });
 }
 void CommandManager::SubmitGraphics(SubmitInfo submit_info,
@@ -88,7 +135,7 @@ void CommandManager::SubmitGraphics(SubmitInfo submit_info,
     VkCommandBuffer vk_command_buffer = primary_graphics_command_buffers[0];
     uint32_t id = submit_id++;
     
-    ThreadPool::Dispatch([this, vk_command_buffer, record_function, submit_info, id]{
+    core::threadpool.Dispatch([this, vk_command_buffer, record_function, submit_info, id]{
         vkResetCommandBuffer(vk_command_buffer, 0);
         VkCommandBufferBeginInfo begin_info{};
         begin_info.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -100,9 +147,9 @@ void CommandManager::SubmitGraphics(SubmitInfo submit_info,
         record_function(vk_command_buffer);
         vkEndCommandBuffer(vk_command_buffer);
 
-        ThreadPool::Dispatch([this, submit_info, vk_command_buffer, id]{
+        core::threadpool.Dispatch([this, submit_info, vk_command_buffer, id]{
             if(id != to_submit_id){
-                return ThreadPool::ReturnState::REDISPATCH;
+                return core::Threadpool::TASK_NOT_READY;
             }
             
             VkSubmitInfo vk_submit_info{};
@@ -127,23 +174,23 @@ void CommandManager::SubmitGraphics(SubmitInfo submit_info,
                 
                 submit_info.fence->submission_flag = true;
                 submission_condition_variable.notify_all();
-                return ThreadPool::ReturnState::COMPLETE;
+                return core::Threadpool::TASK_COMPLETE;
             }
             vkQueueSubmit(render::context.graphics_queue.vk_queue, 1,
                           &vk_submit_info, VK_NULL_HANDLE);
             to_submit_id++;
 
-            return ThreadPool::ReturnState::COMPLETE;
+            return core::Threadpool::TASK_COMPLETE;
         });
         
-        return ThreadPool::ReturnState::COMPLETE;
+        return core::Threadpool::TASK_COMPLETE;
     });
 }
 void CommandManager::Present(PresentInfo present_info){
     uint32_t id = submit_id++;
-    ThreadPool::Dispatch([this, present_info, id]{
+    core::threadpool.Dispatch([this, present_info, id]{
         if(id != to_submit_id){
-            return ThreadPool::ReturnState::REDISPATCH;
+            return core::Threadpool::TASK_NOT_READY;
         }
         
         VkPresentInfoKHR vk_present_info{};
@@ -163,7 +210,7 @@ void CommandManager::Present(PresentInfo present_info){
         
         to_submit_id++;
         
-        return ThreadPool::ReturnState::COMPLETE;
+        return core::Threadpool::TASK_COMPLETE;
     });
 }
 

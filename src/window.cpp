@@ -1,17 +1,17 @@
 #include "window.h"
 
 namespace render{
-void Window::Init(){
-    SDL_Init(SDL_INIT_EVERYTHING);
-}
+Window::Window(){};
+Window::~Window(){}
 
-Window::Window(const char* name, int width, int height, int x, int y)
-: width(width), height(height) {
+void Window::Initialize(WindowInfo info){
+    width = info.width;
+    height = info.height;
     SDL_SetRelativeMouseMode(SDL_TRUE);
-    window_ = SDL_CreateWindow(name, x, y, width, height,
+    window_ = SDL_CreateWindow(info.name, info.x, info.y, width, height,
                                SDL_WINDOW_RESIZABLE | SDL_WINDOW_VULKAN);
 }
-Window::~Window(){
+void Window::Terminate(){
     SDL_DestroyWindow(window_);
 }
 

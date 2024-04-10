@@ -107,7 +107,10 @@ void* StagingManager::UploadToImage (size_t upload_size, Texture* texture){
 void StagingManager::SubmitUpload(SubmitInfo submit_info){
     vkEndCommandBuffer(vk_command_buffer);
     submit_info.fence = &upload_fence;
-    render::command_manager.SubmitGraphics(submit_info, vk_command_buffer);
+    auto command_buffer = new CommandBuffer{};
+    command_buffer->vk_command_buffer = vk_command_buffer;
+    command_buffer->record_submission_complete = true;
+    render::command_manager.SubmitAsync(submit_info, command_buffer);
 }
 void StagingManager::AwaitUploadCompletion(){
     upload_active_mutex.lock();

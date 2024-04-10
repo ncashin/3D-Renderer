@@ -53,31 +53,32 @@ void HandleEvent(){
 }
 
 render::Camera camera{};
-float camera_speed = 0.1f;
-const float camera_sensitivity = 0.1f;
-const float camera_zoom_sensitivity = 0.4f;
-void UpdateCamera(){
-    if(Input::GetKey(ScanCode::W) == INPUT_STATE_DOWN) 
-        camera.position += camera_speed * camera.front;
-    if(Input::GetKey(ScanCode::S) == INPUT_STATE_DOWN) 
-        camera.position -= camera_speed * camera.front;
+float camera_speed = 3.0f;
+const float camera_sensitivity = 3.0f;
+const float camera_zoom_sensitivity = 12.0f;
+void UpdateCamera(float delta_time){
+    float camera_speed_dt = camera_speed * delta_time;
+    if(Input::GetKey(ScanCode::W) == INPUT_STATE_DOWN)
+        camera.position += camera_speed_dt * camera.front;
+    if(Input::GetKey(ScanCode::S) == INPUT_STATE_DOWN)
+        camera.position -= camera_speed_dt * camera.front;
 
     if(Input::GetKey(ScanCode::D) == INPUT_STATE_DOWN)
-        camera.position -= camera_speed * glm::normalize(glm::cross(camera.front, camera.up));
+        camera.position -= camera_speed_dt * glm::normalize(glm::cross(camera.front, camera.up));
     if(Input::GetKey(ScanCode::A) == INPUT_STATE_DOWN)
-        camera.position += camera_speed * glm::normalize(glm::cross(camera.front, camera.up));
+        camera.position += camera_speed_dt * glm::normalize(glm::cross(camera.front, camera.up));
     
     if(Input::GetKey(ScanCode::SDL_SCANCODE_SPACE) == INPUT_STATE_DOWN){
-        camera.position += camera.up * camera_speed;
+        camera.position += camera.up * camera_speed_dt;
     }
     if(Input::GetKey(ScanCode::SDL_SCANCODE_LSHIFT) == INPUT_STATE_DOWN){
-        camera.position -= camera.up * camera_speed;
+        camera.position -= camera.up * camera_speed_dt;
     }
     
-    camera.view_size += Input::GetMouseScroll() * camera_zoom_sensitivity;
+    camera.view_size += Input::GetMouseScroll() * camera_zoom_sensitivity * delta_time;
 
-    camera.yaw   -= Input::GetMouseOffset().x * camera_sensitivity;
-    camera.pitch -= Input::GetMouseOffset().y * camera_sensitivity;
+    camera.yaw   -= Input::GetMouseOffset().x * camera_sensitivity * delta_time;
+    camera.pitch -= Input::GetMouseOffset().y * camera_sensitivity * delta_time;
     
     if(camera.pitch > 89.0f)
       camera.pitch =  89.0f;
@@ -87,7 +88,7 @@ void UpdateCamera(){
 
 render::Window window{};
 void Initialize(){
-    const uint32_t thread_count = 1;
+    const uint32_t thread_count = 2;
     core::threadpool.Initialize(thread_count);
     
     SDL_Init(SDL_INIT_EVERYTHING);
@@ -118,6 +119,7 @@ void Initialize(){
 
 MESH_VERTEX_STRUCT Vertex {
     MVS_POSITION(pos);
+    float padding[100];
     MVS_TEXTURE_COORDINATE_2D(tc2d);
 };
 
@@ -181,40 +183,56 @@ int main(int argc, char** argv){
     
     render::staging_manager.SubmitUpload({});
     
-    render::Fence fence{};
-    fence.Initialize(render::Fence::InitializeSignaled);
+    render::Fence fence[2];
+    fence[0].Initialize(render::Fence::InitializeSignaled);
+    fence[1].Initialize(render::Fence::InitializeSignaled);
+
+    render::Fence image_fence[2];
+    image_fence[0].Initialize(render::Fence::InitializeSignaled);
+    image_fence[1].Initialize(render::Fence::InitializeSignaled);
     
-    render::Semaphore render_finished_semaphore;
-    render_finished_semaphore.Initialize();
-    render::Semaphore swapchain_semaphore;
-    swapchain_semaphore.Initialize();
+    render::Semaphore render_finished_semaphore[2];
+    render_finished_semaphore[0].Initialize();
+    render_finished_semaphore[1].Initialize();
+    
+    render::Semaphore swapchain_semaphore[2];
+    swapchain_semaphore[0].Initialize();
+    swapchain_semaphore[1].Initialize();
     
     render::pipeline_manager.AwaitCompilation(pipeline);
     delete vertex_shader;
     delete fragment_shader;
     
     render::staging_manager.AwaitUploadCompletion();
+        
+    uint8_t current_frame = 0;
     
     auto  start = std::chrono::high_resolution_clock::now();
     bool submission_fence = true;
+    
+    render::CommandBuffer* command_buffer[2];
     while(running){
+        
+        auto finish = std::chrono::high_resolution_clock::now();
+        float delta_time = std::chrono::duration_cast<std::chrono::microseconds>(finish - start).count() / 1000000.0f;
+        std::cout << "Frame Time: "
+        << delta_time
+        << " seconds\n";
+        start = std::chrono::high_resolution_clock::now();
+        
+
         Input::Flush();
         HandleEvent();
-        UpdateCamera();
+        UpdateCamera(delta_time);
         
         if(Input::GetKey(ScanCode::P)){
             running = false;
         }
         
-        render::command_manager.WaitForFence(&fence);
-        render::command_manager.ResetFence(&fence);
-        {
-            auto  finish = std::chrono::high_resolution_clock::now();
-            std::cout << "Frame Time: "
-            << std::chrono::duration_cast<std::chrono::microseconds>(finish - start).count()
-            << " microseconds\n";
-            start = std::chrono::high_resolution_clock::now();
-        }
+        render::command_manager.WaitForFence(&fence[current_frame]);
+        render::command_manager.ResetFence(&fence[current_frame]);
+        render::command_manager.Free(command_buffer[current_frame]);
+
         
         /*render::descriptor_allocator.Flush();
         auto descriptor_set = render::descriptor_allocator.Allocate(set_layout);
@@ -222,22 +240,20 @@ int main(int argc, char** argv){
         auto b = render::descriptor_allocator.Allocate(set_layout);
         auto c = render::descriptor_allocator.Allocate(set_layout);
         auto d = render::descriptor_allocator.Allocate(set_layout);*/
-	
-        uint32_t image_index = swapchain->AcquireImage(swapchain_semaphore.vk_semaphore, VK_NULL_HANDLE);
-        
-        render::SubmitInfo submit_info{};
-        submit_info.fence             = &fence;
-        submit_info.wait_semaphores   = {swapchain_semaphore};
-        submit_info.signal_semaphores = {render_finished_semaphore};
-        submit_info.wait_stage_flags  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+	        
+        render::command_manager.WaitForFence(&image_fence[current_frame]);
+        render::command_manager.ResetFence(&image_fence[current_frame]);
+        image_fence[current_frame].submission_flag = true;
+        uint32_t image_index = swapchain->AcquireImage(swapchain_semaphore[current_frame].vk_semaphore,
+                                                       image_fence[current_frame].vk_fence);
         
         float aspect_ratio = (float)window.width / (float)window.height;
         glm::mat4 view_projection(camera.GetViewProjection(aspect_ratio));
-
-        render::command_manager.SubmitGraphics(submit_info,
-                                              [render_buffer, swapchain, image_index, pipeline,
-                                               view_projection, descriptor_set, &mesh]
-                                               (VkCommandBuffer vk_command_buffer){
+        
+        command_buffer[current_frame] =
+        render::command_manager.RecordAsync([render_buffer, swapchain, image_index, pipeline,
+                                             view_projection, descriptor_set, &mesh]
+                                             (VkCommandBuffer vk_command_buffer){
             render_buffer->Begin(vk_command_buffer, swapchain, image_index);
             pipeline->Bind(vk_command_buffer);
             
@@ -266,20 +282,36 @@ int main(int argc, char** argv){
             vkCmdEndRenderPass(vk_command_buffer);
         });
         
+        render::command_manager.SignalRecordCompletion(command_buffer[current_frame]);
+        
+        render::SubmitInfo submit_info{};
+        submit_info.fence             = &fence[current_frame];
+        submit_info.wait_semaphores   = {swapchain_semaphore[current_frame]};
+        submit_info.signal_semaphores = {render_finished_semaphore[current_frame]};
+        submit_info.wait_stage_flags  = VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT;
+
+        render::command_manager.SubmitAsync(submit_info, command_buffer[current_frame]);
         
         render::PresentInfo present_info{};
-        present_info.wait_semaphores = {render_finished_semaphore};
+        present_info.wait_semaphores = {render_finished_semaphore[current_frame]};
         present_info.swapchains      = {swapchain};
         present_info.image_indices   = {image_index};
         
-        render::command_manager.Present(present_info);
+        render::command_manager.PresentAsync(present_info);
+        
+        current_frame = (current_frame + 1) % 2;
     }
     
-    render::command_manager.WaitForFence(&fence);
-    fence.Terminate();
+    render::command_manager.WaitForFence(&fence[current_frame]);
+    render::command_manager.WaitForFence(&fence[(current_frame + 1) % 2]);
+    fence[0].Terminate();
+    fence[1].Terminate();
+
+    swapchain_semaphore[0].Terminate();
+    swapchain_semaphore[1].Terminate();
     
-    swapchain_semaphore.Terminate();
-    render_finished_semaphore.Terminate();
+    render_finished_semaphore[0].Terminate();
+    render_finished_semaphore[1].Terminate();
 
     render::gpu_buffer.Terminate();
     render::pipeline_manager.Destroy(pipeline);

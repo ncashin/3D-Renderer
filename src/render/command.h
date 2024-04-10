@@ -44,9 +44,8 @@ struct PresentInfo{
 
 class CommandBuffer{
 public:
-    uint8_t record_count = 1;
-    uint8_t record_complete_count = 0;
-    VkCommandBuffer vk_command_buffer;
+    bool record_submission_complete = false;
+    VkCommandBuffer vk_command_buffer = VK_NULL_HANDLE;
 };
 
 class CommandManager{
@@ -54,29 +53,43 @@ public:
     void Initialize();
     void Terminate();
     
-    CommandBuffer* RecordAsync(std::function<void(VkCommandBuffer)> record_function);
-    void SubmitAsync(SubmitInfo submit_info, CommandBuffer* command_buffer);
+    void Free(CommandBuffer* command_buffer);
     
-    void SubmitGraphics(SubmitInfo submission_info,
-                        VkCommandBuffer vk_command_buffer);
-    void SubmitGraphics(SubmitInfo submission_info,
-                        std::function<void(VkCommandBuffer)> record_function);
-    void SubmitCompute (SubmitInfo submission_info, std::function<void(VkCommandBuffer)> record_function);
-    void Present(PresentInfo present_info);
+    CommandBuffer* RecordAsync(std::function<void(VkCommandBuffer)> record_function);
+    void           RecordAsync(std::function<void(VkCommandBuffer)> record_function,
+                               CommandBuffer* command_buffer);
+    void SignalRecordCompletion(CommandBuffer* command_buffer);
+    
+    void SubmitAsync(SubmitInfo submit_info, CommandBuffer* command_buffer);
+
+    void PresentAsync(PresentInfo present_info);
     
     void ResetFence  (Fence* fence);
     void WaitForFence(Fence* fence);
     
-    void Present();
+    
+    void WTRecord();
     
     std::mutex  submission_mutex{};
     std::condition_variable submission_condition_variable{};
 
-    std::atomic<uint32_t> to_submit_id;
-    std::atomic<uint32_t> submit_id;
+    std::atomic<uint32_t> to_record_id = 0;
+    std::atomic<uint32_t> record_id = 0;
+    
+    std::atomic<uint32_t> to_submit_id = 0;
+    std::atomic<uint32_t> submit_id = 0;
 
+    std::mutex command_buffer_mutex{};
     VkCommandPool primary_graphics_command_pool{};
     std::vector<VkCommandBuffer> primary_graphics_command_buffers{};
+    
+    bool wt_active = true;
+    std::thread wt_record;
+    std::mutex wt_record_mutex;
+    std::condition_variable wt_record_condition_variable;
+    std::vector<std::function<void()>> wt_record_queue;
+    
+    uint8_t frame = 0;
 };
 extern CommandManager command_manager;
 }
